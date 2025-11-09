@@ -2,10 +2,9 @@
 
 ### Group (work in groups of 2, 3, or 4 people, adjust the number of lines as needed)
 
-- [name_1 - netid_1: email_1]
+- [Christian Ganter - cg6149: cg6149@princeton.edu]
 - [name_2 - netid_2: email_2]
 - [name_3 - netid_3: email_3]
-- [name_4 - netid_4: email_4]
 
 ## Time Investment
 

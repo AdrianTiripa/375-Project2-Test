@@ -171,7 +171,7 @@ Simulator::Instruction Simulator::simOperandCollection(Instruction inst, REGS re
 }
 
 // Resolve next PC whether +4 or branch/jump target taken/not taken
-Simulator::Instruction Simulator::simNextPCResolution(Instruction inst) {
+Simulator::Instruction Simulator::simPCResolution(Instruction inst) {
 
     uint64_t imm5   = inst.rd;
     uint64_t imm7   = inst.funct7;
@@ -435,22 +435,31 @@ Simulator::Instruction Simulator::simCommit(Instruction inst, REGS &regData) {
 // You may find it useful to call functional simulation functions above
 
 Simulator::Instruction Simulator::simIF(uint64_t PC) {
+    Instruction inst = simFetch(PC, simulator.getMemory());
+    simNextPCResolution(inst);
+    return inst;
     throw std::runtime_error("simIF not implemented yet"); // TODO implement IF 
 }
 
 Simulator::Instruction Simulator::simID(Simulator::Instruction inst) {
+    simDecode(inst);
+    simOperandCollection(inst, simulator->regData);
     throw std::runtime_error("simID not implemented yet"); // TODO implement ID
 }
 
 Simulator::Instruction Simulator::simEX(Simulator::Instruction inst) {
+    simArithLogic(inst);
+    simAddrGen(inst);
     throw std::runtime_error("simEX not implemented yet"); // TODO implement EX
 }
 
 Simulator::Instruction Simulator::simMEM(Simulator::Instruction inst) {
+    simMemAccess(inst);
     throw std::runtime_error("simMEM not implemented yet"); // TODO implement MEM
 }
 
 Simulator::Instruction Simulator::simWB(Simulator::Instruction inst) {
+    simCommit(inst, &(simulator->regData));
     throw std::runtime_error("simWB not implemented yet"); // TODO implement WB
 }
 
