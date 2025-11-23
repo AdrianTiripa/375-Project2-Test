@@ -77,16 +77,30 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd) && 
             pipelineInfo.memInst.readsMem){
             pipelineInfo.exInst = nop(BUBBLE);
+
+            // handle memory stage forwarding (reduce load-use stall to 1 from 2)
             if(pipelineInfo.idInst.rs1 == pipelineInfo.memInst.rd)
                 pipelineInfo.idInst.regData[pipelineInfo.idInst.rs1] = pipelineInfo.memInst.regData[pipelineInfo.memIsnt.rd];
             else if(pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd)
                 pipelineInfo.idInst.regData[pipelineInfo.idInst.rs2] = pipelineInfo.memInst.regData[pipelineInfo.memIsnt.rd];
+
         } else {
+
+            // handle execute stage forwarding (no stall at all)
+            if(pipelineInfo.idInst.rs1 == pipelineInfo.exInst.rd)
+                pipelineInfo.idInst.regData[pipelineInfo.idInst.rs1] = pipelineInfo.exInst.regData[pipelineInfo.exInst.rd];
+            else if(pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd)
+                pipelineInfo.idInst.regData[pipelineInfo.idInst.rs2] = pipelineInfo.exInst.regData[pipelineInfo.exInst.rd];
+
             pipelineInfo.exInst = simulator->simEX(pipelineInfo.idInst);
             // handle branch stalls
-            if(pipelineInfo.exInst.nextPC != pipelineInfo.exInst.PC+4)
+            if(pipelineInfo.exInst.nextPC != pipelineInfo.exInst.PC+4){
                 pipelineInfo.idInst = nop(SQUASHED);
-            else
+
+                // handle branch forwarding
+                pipelineInfo.ifInst.PC = pipelineInfo.exInst.nextPC;
+            }
+            else 
                 pipelineInfo.idInst = simulator->simID(pipelineInfo.ifInst);
 
             pipelineInfo.ifInst = simulator->simIF(PC);
@@ -103,9 +117,6 @@ Status runCycles(uint64_t cycles) {
             status = HALT;
             break;
         }
-
-
-
     }
 
 
