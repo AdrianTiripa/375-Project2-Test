@@ -56,6 +56,7 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
     auto status = SUCCESS;
+
     PipeState pipeState = {
         0,
     };
@@ -70,18 +71,44 @@ Status runCycles(uint64_t cycles) {
         pipelineInfo.wbInst = nop(BUBBLE);
         pipelineInfo.wbInst = simulator->simWB(pipelineInfo.memInst);
         pipelineInfo.memInst = simulator->simMEM(pipelineInfo.exInst);
-        pipelineInfo.exInst = simulator->simEX(pipelineInfo.idInst);
-        pipelineInfo.idInst = simulator->simID(pipelineInfo.ifInst);
-        pipelineInfo.ifInst = simulator->simIF(PC);
+
+        // Handle load-use stalls
+        if((pipelineInfo.idInst.rs1 == pipelineInfo.memInst.rd ||
+            pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd) && 
+            pipelineInfo.memInst.readsMem){
+            pipelineInfo.exInst = nop(BUBBLE);
+            if(pipelineInfo.idInst.rs1 == pipelineInfo.memInst.rd)
+                pipelineInfo.idInst.regData[pipelineInfo.idInst.rs1] = pipelineInfo.memInst.regData[pipelineInfo.memIsnt.rd];
+            else if(pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd)
+                pipelineInfo.idInst.regData[pipelineInfo.idInst.rs2] = pipelineInfo.memInst.regData[pipelineInfo.memIsnt.rd];
+        } else {
+            pipelineInfo.exInst = simulator->simEX(pipelineInfo.idInst);
+            // handle branch stalls
+            if(pipelineInfo.exInst.nextPC != pipelineInfo.exInst.PC+4)
+                pipelineInfo.idInst = nop(SQUASHED);
+            else
+                pipelineInfo.idInst = simulator->simID(pipelineInfo.ifInst);
+
+            pipelineInfo.ifInst = simulator->simIF(PC);
+        }
+
+        // Stall Checking Conditions
+        // To be implemented
+        // Load-Use: 1 cycle
+        // Arithmatic Branch: 1 cycle
+        // Load-branch: 2 cycle
 
         // WB Check for halt instruction
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
             break;
         }
+
+
+
     }
 
-    
+
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
