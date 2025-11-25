@@ -443,12 +443,12 @@ Simulator::Instruction Simulator::simIF(uint64_t PC) {
 Simulator::Instruction Simulator::simID(Simulator::Instruction inst) {
     inst = simDecode(inst);
     inst = simOperandCollection(inst, simulator->regData);
+    inst = simNextPCResolution(inst);
     return inst;
     // throw std::runtime_error("simID not implemented yet"); // TODO implement ID
 }
 
 Simulator::Instruction Simulator::simEX(Simulator::Instruction inst) {
-    inst = simNextPCResolution(inst);
     inst = simArithLogic(inst);
     inst = simAddrGen(inst);
     return inst;
