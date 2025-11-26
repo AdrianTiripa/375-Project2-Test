@@ -53,11 +53,11 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
 // return SUCCESS if reaching desired cycles.
 // return HALT if the simulator halts on 0xfeedfeed
 
-// function for load use
-// arth branch
-// load branch
-
 // cache
+
+// keep track of the number of cycles stall is applied
+static int stallCyclesCount = 0;
+
 
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
@@ -74,11 +74,240 @@ Status runCycles(uint64_t cycles) {
         count++;
         cycleCount++;
     
-        pipelineInfo.wbInst = nop(BUBBLE);
-        pipelineInfo.wbInst = simulator->simWB(pipelineInfo.memInst);
-        pipelineInfo.memInst = simulator->simMEM(pipelineInfo.exInst);
+        // to keep track of the previous instructions in each 
+        // stage before the cycle is executed
+        Simulator::Instruction ifPrev = pipelineInfo.ifInst;
+        Simulator::Instruction idPrev = pipelineInfo.idInst;
+        Simulator::Instruction exPrev = pipelineInfo.exInst;
+        Simulator::Instruction memPrev = pipelineInfo.memInst;
 
+    // WB
+        pipelineInfo.wbInst = nop(BUBBLE);
+        pipelineInfo.wbInst = simulator->simWB(memPrev);
+    
+    // MEM
+        pipelineInfo.memInst = simulator->simMEM(exPrev);
+        
+        bool StallID    = false;
+        bool BubbleEx   = false;
+
+        // Hazard Detection
+        
+        bool idPrevisBranch = (idPrev.opcode == OP_BRANCH) || 
+                        (idPrev.opcode == OP_JAL)    ||
+                        (idPrev.opcode == OP_JALR);
+        
+        if(stallCyclesCount > 0){
+            StallID = true;
+            BubbleEx = true;
+            stallCyclesCount --;
+        }
+        else{
         // Handle load-use stalls
+            if((idPrev.rs1 == exPrev.rd ||
+                idPrev.rs2 == exPrev.rd) && 
+                exPrev.readsMem && exPrev.writesRd
+                && exPrev.rd != 0 && !idPrevisBranch)
+            {
+                StallID = true;
+                BubbleEx = true;
+            }
+
+            // Handle arith-branch
+            if(exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0
+            && idPrevisBranch && !StallID && 
+            (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd))
+            {            
+                StallID = true;
+            }
+
+            // Handle load-branch
+            if(exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0
+                && idPrevisBranch && (idPrev.rs1 == exPrev.rd ||
+                idPrev.rs2 == idPrev.rd) && !StallID)
+            {
+                StallID = true;
+                BubbleEx = true;
+                stallCyclesCount = 1;
+            }
+        }
+
+        if(BubbleEx) {
+            // insert bubble
+            pipelineInfo.exInst = nop(BUBBLE);
+        } else {
+
+            // normal case
+            // Do FORWARDING between prevMem and Ex and/or prevEx and Ex
+
+            // rs1 forwarding - these can be put in helper functions!!
+            if (idPrev.readsRs1 && idPrev.rs1 != 0) {
+                // From EX/MEM (exPrev) - ALU result is ready here
+                if (exPrev.writesRd && exPrev.rd == idPrev.rs1 &&
+                    exPrev.doesArithLogic) {
+                    idPrev.op1Val = exPrev.arithResult;
+                }
+                // From MEM  (memPrev) - load result is ready here
+                if (memPrev.writesRd && memPrev.rd == idPrev.rs1) {
+                    if (memPrev.readsMem) {
+                        idPrev.op1Val = memPrev.memResult;
+                    } else if (memPrev.doesArithLogic) {
+                        idPrev.op1Val = memPrev.arithResult;
+                    }
+                }
+                // From WB stage (just wrote back this cycle)
+                if (pipelineInfo.wbInst.writesRd &&
+                    pipelineInfo.wbInst.rd == idPrev.rs1) {
+                    if (pipelineInfo.wbInst.readsMem) {
+                        idPrev.op1Val = pipelineInfo.wbInst.memResult;
+                    } else if (pipelineInfo.wbInst.doesArithLogic) {
+                        idPrev.op1Val = pipelineInfo.wbInst.arithResult;
+                    }
+                }
+            }
+            // rs2 forwarding
+            if (idPrev.readsRs2 && idPrev.rs2 != 0) {
+                // From EX/MEM (exPrev)
+                if (exPrev.writesRd && exPrev.rd == idPrev.rs2 &&
+                    exPrev.doesArithLogic) {
+                    idPrev.op2Val = exPrev.arithResult;
+                }
+                // From MEM (memPrev)
+                if (memPrev.writesRd && memPrev.rd == idPrev.rs2) {
+                    if (memPrev.readsMem) {
+                        idPrev.op2Val = memPrev.memResult;
+                    } else if (memPrev.doesArithLogic) {
+                        idPrev.op2Val = memPrev.arithResult;
+                    }
+                }
+                // From WB
+                if (pipelineInfo.wbInst.writesRd &&
+                    pipelineInfo.wbInst.rd == idPrev.rs2) {
+                    if (pipelineInfo.wbInst.readsMem) {
+                        idPrev.op2Val = pipelineInfo.wbInst.memResult;
+                    } else if (pipelineInfo.wbInst.doesArithLogic) {
+                        idPrev.op2Val = pipelineInfo.wbInst.arithResult;
+                    }
+                }
+            }
+
+            pipelineInfo.exInst = simulator->simEX(idPrev);
+        }
+
+        // Do FORWARDING between prevMem and Ex and/or prevEx and Ex (done)
+        
+    // ID
+    
+        Simulator::Instruction newIdInst;
+
+        if(StallID){
+            // do not advance IF inst to ID
+            newIdInst = idPrev;
+        } else {
+            // normal
+            newIdInst = simulator->simID(ifPrev);
+        }
+
+        // DO Forwarding to ID for braches
+        bool newIsBranch = (newIdInst.opcode == OP_BRANCH) || 
+                           (newIdInst.opcode == OP_JAL)    ||
+                           (newIdInst.opcode == OP_JALR);
+
+        if (newIsBranch) {
+            // rs1 forwarding for branch
+            if (newIdInst.readsRs1 && newIdInst.rs1 != 0) {
+                // From EX/MEM  (exPrev)
+                if (exPrev.writesRd && exPrev.rd == newIdInst.rs1 &&
+                    exPrev.doesArithLogic) {
+                    newIdInst.op1Val = exPrev.arithResult;
+                }
+                // From MEM  (memPrev)
+                if (memPrev.writesRd && memPrev.rd == newIdInst.rs1) {
+                    if (memPrev.readsMem) {
+                        newIdInst.op1Val = memPrev.memResult;
+                    } else if (memPrev.doesArithLogic) {
+                        newIdInst.op1Val = memPrev.arithResult;
+                    }
+                }
+                // From WB 
+                if (pipelineInfo.wbInst.writesRd &&
+                    pipelineInfo.wbInst.rd == newIdInst.rs1) {
+                    if (pipelineInfo.wbInst.readsMem) {
+                        newIdInst.op1Val = pipelineInfo.wbInst.memResult;
+                    } else if (pipelineInfo.wbInst.doesArithLogic) {
+                        newIdInst.op1Val = pipelineInfo.wbInst.arithResult;
+                    }
+                }
+            }
+
+            // rs2 forwarding for branch
+            if (newIdInst.readsRs2 && newIdInst.rs2 != 0) {
+                // From EX/MEM  (exPrev)
+                if (exPrev.writesRd && exPrev.rd == newIdInst.rs2 &&
+                    exPrev.doesArithLogic) {
+                    newIdInst.op2Val = exPrev.arithResult;
+                }
+                // From MEM (memPrev)
+                if (memPrev.writesRd && memPrev.rd == newIdInst.rs2) {
+                    if (memPrev.readsMem) {
+                        newIdInst.op2Val = memPrev.memResult;
+                    } else if (memPrev.doesArithLogic) {
+                        newIdInst.op2Val = memPrev.arithResult;
+                    }
+                }
+                // From WB 
+                if (pipelineInfo.wbInst.writesRd &&
+                    pipelineInfo.wbInst.rd == newIdInst.rs2) {
+                    if (pipelineInfo.wbInst.readsMem) {
+                        newIdInst.op2Val = pipelineInfo.wbInst.memResult;
+                    } else if (pipelineInfo.wbInst.doesArithLogic) {
+                        newIdInst.op2Val = pipelineInfo.wbInst.arithResult;
+                    }
+                }
+            }
+        }
+
+        // Check if branch
+        bool isBranch = (newIdInst.opcode == OP_BRANCH) || 
+                        (newIdInst.opcode == OP_JAL)    ||
+                        (newIdInst.opcode == OP_JALR);
+
+        bool taken = isBranch && (newIdInst.nextPC != newIdInst.PC + 4);
+
+        if(!StallID) {
+            // if branch taken, then flush the if inst and move PC to 
+            // the address given by the branch
+            if(taken){
+                pipelineInfo.ifInst = nop(SQUASHED);
+                PC = newIdInst.nextPC;
+            }
+            else{
+                // not taken, then just move on with PC + 4
+                PC = newIdInst.PC + 4;
+            }
+
+        }
+        // update pipeline's ID inst
+        pipelineInfo.idInst = newIdInst; 
+
+        // DO exceptions
+        
+
+    // IF
+        if(StallID){
+            // if stalled, keep the same
+            pipelineInfo.ifInst = ifPrev;
+        }
+        else {
+            pipelineInfo.ifInst = simulator->simIF(PC);
+            // make its status clear - might need for branch prediction
+            pipelineInfo.ifInst.status = SPECULATIVE;
+
+        }
+        // Cache?
+
+// Previous Code
+        /* // Handle load-use stalls
         if((pipelineInfo.idInst.rs1 == pipelineInfo.memInst.rd ||
             pipelineInfo.idInst.rs2 == pipelineInfo.memInst.rd) && 
             pipelineInfo.memInst.readsMem){
@@ -110,7 +339,7 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst = simulator->simID(pipelineInfo.ifInst);
 
             pipelineInfo.ifInst = simulator->simIF(PC);
-        }
+        }*/
 
         // Stall Checking Conditions
         // To be implemented
@@ -123,9 +352,11 @@ Status runCycles(uint64_t cycles) {
             status = HALT;
             break;
         }
+        
+        // We'll need to add the stats
     }
 
-
+    // Finally, update the pipeline
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
