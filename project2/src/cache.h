@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include "Utilities.h"
+#include <cmath>
 
 struct CacheConfig {
     // Cache size in bytes.
@@ -49,4 +50,11 @@ public:
 
     uint64_t getHits() { return hits; }
     uint64_t getMisses() { return misses; }
+
+    vector<vector<uint64_t>> cacheArray; // model for cache
+    vector<vector<bool>> validBits; // valid bits for each cache block
+    vector<uint64_t> LRUCounter; // keeps track of LRU for each set
+
+    uint64_t numSets;
+    uint64_t numBlocks;
 };
