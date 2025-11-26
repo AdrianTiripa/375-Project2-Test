@@ -435,14 +435,14 @@ Simulator::Instruction Simulator::simCommit(Instruction inst, REGS &regData) {
 // You may find it useful to call functional simulation functions above
 
 Simulator::Instruction Simulator::simIF(uint64_t PC) {
-    Instruction inst = simFetch(PC, simulator.getMemory());
+    Instruction inst = simFetch(PC, memory);
     return inst;
     // throw std::runtime_error("simIF not implemented yet"); // TODO implement IF 
 }
 
 Simulator::Instruction Simulator::simID(Simulator::Instruction inst) {
     inst = simDecode(inst);
-    inst = simOperandCollection(inst, simulator->regData);
+    inst = simOperandCollection(inst, regData);
     inst = simNextPCResolution(inst);
     return inst;
     // throw std::runtime_error("simID not implemented yet"); // TODO implement ID
@@ -456,13 +456,13 @@ Simulator::Instruction Simulator::simEX(Simulator::Instruction inst) {
 }
 
 Simulator::Instruction Simulator::simMEM(Simulator::Instruction inst) {
-    inst = simMemAccess(inst);
+    inst = simMemAccess(inst, memory);
     return inst;
     // throw std::runtime_error("simMEM not implemented yet"); // TODO implement MEM
 }
 
 Simulator::Instruction Simulator::simWB(Simulator::Instruction inst) {
-    inst = simCommit(inst, &(simulator->regData));
+    inst = simCommit(inst, regData);
     return inst;
     // throw std::runtime_error("simWB not implemented yet"); // TODO implement WB
 }
