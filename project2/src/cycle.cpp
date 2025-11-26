@@ -94,7 +94,7 @@ Status runCycles(uint64_t cycles) {
         // Hazard Detection
         
         bool idPrevisBranch = (idPrev.opcode == OP_BRANCH) || 
-                        (idPrev.opcode == OP_JAL)    ||
+                        (idPrev.opcode == OP_JAL) ||
                         (idPrev.opcode == OP_JALR);
         
         if(stallCyclesCount > 0){
@@ -124,7 +124,7 @@ Status runCycles(uint64_t cycles) {
             // Handle load-branch
             if(exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0
                 && idPrevisBranch && (idPrev.rs1 == exPrev.rd ||
-                idPrev.rs2 == idPrev.rd) && !StallID)
+                idPrev.rs2 == exPrev.rd) && !StallID)
             {
                 StallID = true;
                 BubbleEx = true;
@@ -155,15 +155,9 @@ Status runCycles(uint64_t cycles) {
                         idPrev.op1Val = memPrev.arithResult;
                     }
                 }
-                // From WB stage (just wrote back this cycle)
-                if (pipelineInfo.wbInst.writesRd &&
-                    pipelineInfo.wbInst.rd == idPrev.rs1) {
-                    if (pipelineInfo.wbInst.readsMem) {
-                        idPrev.op1Val = pipelineInfo.wbInst.memResult;
-                    } else if (pipelineInfo.wbInst.doesArithLogic) {
-                        idPrev.op1Val = pipelineInfo.wbInst.arithResult;
-                    }
-                }
+                // From WB stage (just wrote back this cycle)- SORRY,
+                // I deleted it, we dont need it
+            
             }
             // rs2 forwarding
             if (idPrev.readsRs2 && idPrev.rs2 != 0) {
@@ -179,16 +173,7 @@ Status runCycles(uint64_t cycles) {
                     } else if (memPrev.doesArithLogic) {
                         idPrev.op2Val = memPrev.arithResult;
                     }
-                }
-                // From WB
-                if (pipelineInfo.wbInst.writesRd &&
-                    pipelineInfo.wbInst.rd == idPrev.rs2) {
-                    if (pipelineInfo.wbInst.readsMem) {
-                        idPrev.op2Val = pipelineInfo.wbInst.memResult;
-                    } else if (pipelineInfo.wbInst.doesArithLogic) {
-                        idPrev.op2Val = pipelineInfo.wbInst.arithResult;
-                    }
-                }
+                }        
             }
 
             pipelineInfo.exInst = simulator->simEX(idPrev);
@@ -229,15 +214,6 @@ Status runCycles(uint64_t cycles) {
                         newIdInst.op1Val = memPrev.arithResult;
                     }
                 }
-                // From WB 
-                if (pipelineInfo.wbInst.writesRd &&
-                    pipelineInfo.wbInst.rd == newIdInst.rs1) {
-                    if (pipelineInfo.wbInst.readsMem) {
-                        newIdInst.op1Val = pipelineInfo.wbInst.memResult;
-                    } else if (pipelineInfo.wbInst.doesArithLogic) {
-                        newIdInst.op1Val = pipelineInfo.wbInst.arithResult;
-                    }
-                }
             }
 
             // rs2 forwarding for branch
@@ -255,22 +231,9 @@ Status runCycles(uint64_t cycles) {
                         newIdInst.op2Val = memPrev.arithResult;
                     }
                 }
-                // From WB 
-                if (pipelineInfo.wbInst.writesRd &&
-                    pipelineInfo.wbInst.rd == newIdInst.rs2) {
-                    if (pipelineInfo.wbInst.readsMem) {
-                        newIdInst.op2Val = pipelineInfo.wbInst.memResult;
-                    } else if (pipelineInfo.wbInst.doesArithLogic) {
-                        newIdInst.op2Val = pipelineInfo.wbInst.arithResult;
-                    }
-                }
+
             }
         }
-
-        // Check if branch
-        bool isBranch = (newIdInst.opcode == OP_BRANCH) || 
-                        (newIdInst.opcode == OP_JAL)    ||
-                        (newIdInst.opcode == OP_JALR);
 
         bool taken = isBranch && (newIdInst.nextPC != newIdInst.PC + 4);
 
