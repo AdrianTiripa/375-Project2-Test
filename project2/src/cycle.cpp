@@ -109,7 +109,6 @@ Status runCycles(uint64_t cycles) {
                 exPrev.readsMem && exPrev.writesRd
                 && exPrev.rd != 0 && !idPrevisBranch)
             {
-                StallID = true;
                 BubbleEx = true;
             }
 
