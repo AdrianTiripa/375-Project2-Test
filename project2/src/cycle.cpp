@@ -114,8 +114,9 @@ Status runCycles(uint64_t cycles) {
             }
 
             // Handle arith-branch
+            // CHANGE TO CHECK FOR BEQ/BNE, etc
             if(exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0
-            && idPrevisBranch && !StallID && 
+            && idPrevisBranch && 
             (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd))
             {            
                 StallID = true;
@@ -124,7 +125,7 @@ Status runCycles(uint64_t cycles) {
             // Handle load-branch
             if(exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0
                 && idPrevisBranch && (idPrev.rs1 == exPrev.rd ||
-                idPrev.rs2 == exPrev.rd) && !StallID)
+                idPrev.rs2 == exPrev.rd))
             {
                 StallID = true;
                 BubbleEx = true;
