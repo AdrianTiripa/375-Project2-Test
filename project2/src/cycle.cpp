@@ -57,6 +57,7 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
 
 // keep track of the number of cycles stall is applied
 static int stallCyclesCount = 0;
+static int iCacheStallCycles = 0;
 
 
 Status runCycles(uint64_t cycles) {
@@ -237,17 +238,38 @@ Status runCycles(uint64_t cycles) {
 
         bool taken = isBranch && (newIdInst.nextPC != newIdInst.PC + 4);
 
+    //  ID + IF
         if(!StallID) {
             // if branch taken, then flush the if inst and move PC to 
             // the address given by the branch
             if(taken){
-                pipelineInfo.ifInst = nop(SQUASHED);
+                pipelineInfo.idInst = nop(SQUASHED);
                 PC = newIdInst.nextPC;
+                /*
+                NOTE
+                I am assuming here that if there is a branch which will change the
+                PC then we are to abort the stall cycles for the 
+                */
+                iCacheStallCycles = 0;
+                pipelineInfo.ifInst = simulator->simIF(PC);
             }
-            else{
+            else if (iCacheStallCycles >0) {
                 // not taken, then just move on with PC + 4
-                PC = newIdInst.PC + 4;
+                pipelineInfo.idInst = newIdInst;
+                pipelineInfo.ifInst = nop(IDLE);
+                iCacheStallCycles--;
             }
+            else if(!iCache->access()) {
+                pipelineInfo.idInst = newIdInst;
+                pipelineInfo.ifInst = nop(IDLE);
+                iCacheStallCycles = iCache->config->missLatency;
+            } else {
+                pipelineInfo.idInst = newIdInst;
+                pipelineInfo.ifInst = simulator->simIF(PC);
+            }
+
+        }
+        else {
 
         }
         // update pipeline's ID inst
@@ -255,19 +277,6 @@ Status runCycles(uint64_t cycles) {
 
         // DO exceptions
         
-
-    // IF
-        if(StallID){
-            // if stalled, keep the same
-            pipelineInfo.ifInst = ifPrev;
-        }
-        else {
-            pipelineInfo.ifInst = simulator->simIF(PC);
-            // make its status clear - might need for branch prediction
-            pipelineInfo.ifInst.status = SPECULATIVE;
-
-        }
-        // Cache?
 
 // Previous Code
         /* // Handle load-use stalls
