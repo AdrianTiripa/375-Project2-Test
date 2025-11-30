@@ -127,11 +127,11 @@ Status runCycles(uint64_t cycles) {
             if(BubbleEx) {
 
                 // Handle forwarding from the memory register to the ID stage
-                pipelineInfo.idInst.op1Val = (pipelineInfo.memInst.writesRd && pipelineInfo.memInst.rd 
-                                    == idPrev.rs1 && memPrev.readsMem) ? pipelineInfo.memInst.memResult;
-                pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && pipelineInfo.memInst.rd 
-                                    == idPrev.rs2 && memPrev.readsMem) ? pipelineInfo.memInst.memResult;
-
+                pipelineInfo.idInst.op1Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd 
+                                    == idPrev.rs1) && memPrev) ? pipelineInfo.memInst.memResult;
+                pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd 
+                                    == idPrev.rs2) && memPrev.readsMem) ? pipelineInfo.memInst.memResult;
+                iCacheStallCycles = max(0, iCacheStallCycles - 1);
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
             } 
@@ -208,7 +208,6 @@ Status runCycles(uint64_t cycles) {
                 }
                 // Case: Branch is not taken OR no branch
                 else {
-                    
                     pipelineInfo.idInst = simulator->simID(ifPrev);
                     PC = (!pipelineInfo.idInst.isLegal) 0x8000:
                     pipelineInfo.idInst.nextPC;
