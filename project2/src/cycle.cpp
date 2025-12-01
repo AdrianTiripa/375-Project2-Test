@@ -107,9 +107,12 @@ Status runCycles(uint64_t cycles) {
         }
         // Case: dCache hit OR memory not accessed
         else {
-            
-            bool StallID    = false;
-            bool BubbleEx   = false;
+            // MEM
+            pipelineInfo.memInst = simulator->simMEM(exPrev);
+
+            bool idSquash    = false;
+            bool loadUse   = false;
+            bool arithBranch - false;
 
             // Hazard Detection
             
@@ -117,14 +120,17 @@ Status runCycles(uint64_t cycles) {
                             (idPrev.opcode == OP_JAL) ||
                             (idPrev.opcode == OP_JALR);
 
-            // Handle load-use stalls
-            BubbleEx = (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) && exPrev.readsMem && exPrev.writesRd
+            // Handle load-use Stalls
+            loadUse = (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) && exPrev.readsMem && exPrev.writesRd
                         && exPrev.rd != 0 && !idPrevisBranch;
-
+            
+            // Handle Arith-Branch Stalls
+            arithBranch = exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0
+                        && isBranch && (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd);
             // Ex
 
-            // Case: Load-Use Stall
-            if(BubbleEx) {
+            // Case: Load-Use / Arith-Branch Stall
+            if(loadUse || arithBranch) {
 
                 // Handle forwarding from the memory register to the ID stage
                 pipelineInfo.idInst.op1Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd 
@@ -139,8 +145,11 @@ Status runCycles(uint64_t cycles) {
             else {
                 // normal case
                 // Do FORWARDING between prevMem and Ex and/or prevEx and Ex
-                idPrev.op1Val = (exPrev.writesRd && exPrev.rd == idPrev.rs1 && exPrev.doesArithLogic) ? exPrev.arithResult;
-                idPrev.op2Val = (exPrev.writesRd && exPrev.rd == idPrev.rs2 && exPrev.doesArithLogic) ? exPrev.arithResult;
+                idPrev.op1Val = (exPrev.writesRd && exPrev.rd == idPrev.rs1 && exPrev.doesArithLogic) ? exPrev.arithResult:
+                                (memPrev.writesRd && memPrev.rd == idPrev.rs1) ? memPrev.memResult;
+                idPrev.op2Val = (exPrev.writesRd && exPrev.rd == idPrev.rs2 && exPrev.doesArithLogic) ? exPrev.arithResult:
+                                (memPrev.writesRd && memPrev.rd == idPrev.rs1) ? memPrev.memResult;
+
                 
                 /*
                 Making slight changes to forwarding to prevent mem from writing over ex
@@ -191,10 +200,10 @@ Status runCycles(uint64_t cycles) {
 
                 // Handle arith-branch
                 // Question: Should we change to check for BEQ/BNE/ Arith branches?      
-                StallID = isBranch && (idPrev.nextPC != idPrev.PC + 4);
+                idSquash = isBranch && (idPrev.nextPC != idPrev.PC + 4);
 
                 // Case: Branch is taken
-                if(StallID){
+                if(idSquash){
                     loadStallCount++;
                     pipelineInfo.idInst = nop(SQUASHED);
                     PC = idPrev.nextPC;
