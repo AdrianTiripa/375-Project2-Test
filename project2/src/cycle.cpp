@@ -100,19 +100,18 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.memInst = nop(BUBBLE);
             dCacheStallCycles--;
         }
+        
         // Case: dCache miss on current cycle
         else if (dCacheStall){
             pipelineInfo.memInst = nop(BUBBLE);
             dCacheStallCycles = dCache->config->missLatency;
         }
+
         // Case: dCache hit OR memory not accessed
         else {
+
             // MEM
             pipelineInfo.memInst = simulator->simMEM(exPrev);
-
-            bool idSquash    = false;
-            bool loadUse   = false;
-            bool arithBranch - false;
 
             // Hazard Detection
             
@@ -121,86 +120,75 @@ Status runCycles(uint64_t cycles) {
                             (idPrev.opcode == OP_JALR);
 
             // Handle load-use Stalls
-            loadUse = (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) && exPrev.readsMem && exPrev.writesRd
-                        && exPrev.rd != 0 && !idPrevisBranch;
+            bool loadUse = (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) && 
+                        exPrev.opcode == OP_LOAD && exPrev.rd != 0;
             
             // Handle Arith-Branch Stalls
-            arithBranch = exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0
-                        && isBranch && (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd);
+            bool arithBranch = isBranch && exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0 &&
+                         (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd);
+            
+            // Handle LoadBranch
+            // NOTE: the only time a nop is inserted between a load and a branch
+            // is when there is a LoadBranch Stall. True?
+            bool loadBranch = isBranch && memPrev.opcode == OP_LOAD && exPrev.isNop;
+
             // Ex
 
-            // Case: Load-Use / Arith-Branch Stall
-            if(loadUse || arithBranch) {
-
-                // Handle forwarding from the memory register to the ID stage
-                pipelineInfo.idInst.op1Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd 
-                                    == idPrev.rs1) && memPrev) ? pipelineInfo.memInst.memResult;
-                pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd 
-                                    == idPrev.rs2) && memPrev.readsMem) ? pipelineInfo.memInst.memResult;
+            // Case: Load-Use
+            if(loadUse){
+                // Handle forwarding from MEM stage to the ID stage
+                pipelineInfo.idInst.op1Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs1)) 
+                                                ? pipelineInfo.memInst.memResult;
+                pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
+                                                ? pipelineInfo.memInst.memResult;
                 iCacheStallCycles = max(0, iCacheStallCycles - 1);
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
             } 
-            // Case: No Load-Use Stall
+
+            // Case: Arith-Branch Stall
+            else if(arithBranch){
+                // Handle forwarding from EX stage to the ID stage
+                pipelineInfo.idInst.op1Val = (exPrev.writesRd && (exPrev.rd == idPrev.rs1)) 
+                                                ? exPrev.arithResult;
+                pipelineInfo.idInst.op2Val = (exPrev.writesRd && (exPrev.rd == idPrev.rs2)) 
+                                                ? exPrev.arithResult;
+                iCacheStallCycles = max(0, iCacheStallCycles - 1);
+                // insert bubble
+                pipelineInfo.exInst = nop(BUBBLE);
+                // Update PC Resolution
+                pipelineInfo.idInst = simulator->simNextPCResolution(idPrev);
+            }
+
+            // Case: Load-Branch Stall
+            else if(loadBranch){
+                // Handle forwarding from the memory register to the ID stage
+                pipelineInfo.idInst.op1Val = (pipelineInfo.wbInst.writesRd && (pipelineInfo.wbInst.rd == idPrev.rs1)) 
+                                                ? pipelineInfo.mwbInst.memResult;
+                pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
+                                                ? pipelineInfo.memInst.memResult;
+                iCacheStallCycles = max(0, iCacheStallCycles - 1);
+                // insert bubble
+                pipelineInfo.exInst = nop(BUBBLE);
+                // update PC resolution if needed
+                pipelineInfo.idInst = simulator->simNextPCResolution(idPrev);
+            }
+
+            // Case: No Stalls
             else {
                 // normal case
                 // Do FORWARDING between prevMem and Ex and/or prevEx and Ex
                 idPrev.op1Val = (exPrev.writesRd && exPrev.rd == idPrev.rs1 && exPrev.doesArithLogic) ? exPrev.arithResult:
                                 (memPrev.writesRd && memPrev.rd == idPrev.rs1) ? memPrev.memResult;
                 idPrev.op2Val = (exPrev.writesRd && exPrev.rd == idPrev.rs2 && exPrev.doesArithLogic) ? exPrev.arithResult:
-                                (memPrev.writesRd && memPrev.rd == idPrev.rs1) ? memPrev.memResult;
+                                (memPrev.writesRd && memPrev.rd == idPrev.rs2) ? memPrev.memResult;
 
-                
-                /*
-                Making slight changes to forwarding to prevent mem from writing over ex
-                OLD CODE
-
-                // rs1 forwarding - these can be put in helper functions!!
-                if (idPrev.readsRs1 && idPrev.rs1 != 0) {
-
-                    // From EX/MEM (exPrev) - ALU result is ready here
-                    if (exPrev.writesRd && exPrev.rd == idPrev.rs1 &&
-                        exPrev.doesArithLogic) {
-                        idPrev.op1Val = exPrev.arithResult;
-                    }
-                    // From MEM  (memPrev) - load result is ready here
-                    if (memPrev.writesRd && memPrev.rd == idPrev.rs1) {
-                        if (memPrev.readsMem) {
-                            idPrev.op1Val = memPrev.memResult;
-                        } else if (memPrev.doesArithLogic) {
-                            idPrev.op1Val = memPrev.arithResult;
-                        }
-                    }
-                    // From WB stage (just wrote back this cycle)- SORRY,
-                    // I deleted it, we dont need it
-                
-                }
-                // rs2 forwarding
-                if (idPrev.readsRs2 && idPrev.rs2 != 0) {
-                    // From EX/MEM (exPrev)
-                    if (exPrev.writesRd && exPrev.rd == idPrev.rs2 &&
-                        exPrev.doesArithLogic) {
-                        idPrev.op2Val = exPrev.arithResult;
-                    }
-                    // From MEM (memPrev)
-                    if (memPrev.writesRd && memPrev.rd == idPrev.rs2) {
-                        if (memPrev.readsMem) {
-                            idPrev.op2Val = memPrev.memResult;
-                        } else if (memPrev.doesArithLogic) {
-                            idPrev.op2Val = memPrev.arithResult;
-                        }
-                    }        
-                }
-                */
                 pipelineInfo.exInst = simulator->simEX(idPrev);
                 
-                // ID
-            
                 //  ID + IF
 
-                // Handle arith-branch
-                // Question: Should we change to check for BEQ/BNE/ Arith branches?      
-                idSquash = isBranch && (idPrev.nextPC != idPrev.PC + 4);
+                // Handle always not-taken branch handling    
+                bool idSquash = isBranch && (idPrev.nextPC != idPrev.PC + 4);
 
                 // Case: Branch is taken
                 if(idSquash){
@@ -215,6 +203,7 @@ Status runCycles(uint64_t cycles) {
                     iCacheStallCycles = 0;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                 }
+
                 // Case: Branch is not taken OR no branch
                 else {
                     pipelineInfo.idInst = simulator->simID(ifPrev);
