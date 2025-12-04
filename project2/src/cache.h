@@ -50,6 +50,7 @@ public:
 
     uint64_t getHits() { return hits; }
     uint64_t getMisses() { return misses; }
+    void invalidate(uint64_t address);
 
     vector<vector<uint64_t>> cacheArray; // model for cache
     vector<vector<bool>> validBits; // valid bits for each cache block

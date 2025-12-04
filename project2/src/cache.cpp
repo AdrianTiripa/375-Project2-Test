@@ -97,6 +97,21 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
     return hit;*/
 }
 
+
+void invalidate(uint64_t address){
+    // find tag, index, block offset sizes
+    uint64_t blockOffsetBits = log2(config.blockSize);
+    uint64_t indexBits = log2(numSets); // not sure of the signature
+    uint64_t tagBits = 64 - blockOffsetBits - indexBits;
+
+    // extract tag, index, block offset from address
+    uint64_t blockOffset = address & ((1 << blockOffsetBits) - 1);
+    uint64_t index = (address >> blockOffsetBits) & ((1 << indexBits) - 1);
+    uint64_t tag = address >> (blockOffsetBits + indexBits);
+
+    validBits[index][tag]=false;
+}
+
 // debug: dump information as you needed, here are some examples
 Status Cache::dump(const std::string& base_output_name) {
     ofstream cache_out(base_output_name + "_cache_state.out");
