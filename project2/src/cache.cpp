@@ -40,10 +40,6 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
 
 }
 
-void Cache::invalidate(uint64_t address){
-    
-}
-
 // Access method definition
 bool Cache::access(uint64_t address, CacheOperation readWrite) {
 
