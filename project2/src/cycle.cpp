@@ -220,12 +220,15 @@ Status runCycles(uint64_t cycles) {
                 if(idSquash){
                     loadStallCount++;
                     pipelineInfo.idInst = nop(SQUASHED);
-                    PC = idPrev.nextPC;
                     /*
                     NOTE
                     I am assuming here that if there is a branch which will change the
                     PC then we are to abort the stall cycles for the 
                     */
+                    if(iCacheStallCycles!=0){
+                        invalidate(PC);
+                    }
+                    PC = idPrev.nextPC;
                     iCacheStallCycles = 0;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // Case: New PC misses in iCache
