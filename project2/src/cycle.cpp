@@ -161,7 +161,7 @@ Status runCycles(uint64_t cycles) {
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
                 if(iCacheStallCycles != 0)
-                    iCacheStallCycles - 1;
+                    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
             } 
@@ -176,7 +176,7 @@ Status runCycles(uint64_t cycles) {
                                                 ? exPrev.arithResult:
                                                 pipelineInfo.idInst.op2Val;
                 if(iCacheStallCycles != 0)
-                    iCacheStallCycles - 1;
+                    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // Update PC Resolution
@@ -193,7 +193,7 @@ Status runCycles(uint64_t cycles) {
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
                 if(iCacheStallCycles != 0)
-                    iCacheStallCycles - 1;
+                    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // update PC resolution if needed
