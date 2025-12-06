@@ -171,7 +171,7 @@ Simulator::Instruction Simulator::simOperandCollection(Instruction inst, REGS re
 }
 
 // Resolve next PC whether +4 or branch/jump target taken/not taken
-Simulator::Instruction Simulator::simPCResolution(Instruction inst) {
+Simulator::Instruction Simulator::simNextPCResolution(Instruction inst) {
 
     uint64_t imm5   = inst.rd;
     uint64_t imm7   = inst.funct7;

@@ -29,7 +29,6 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     // cacheSize/blockSize gives number of blocks
     // (cacheSize/blockSize)/ways gives number of sets
     // configParam.ways gives number of blocks per set
-    val = int(6)
     cacheArray = (numSets, vector<uint64_t>(config.ways, 0));
 
     // follows from above, every entry is set to false initially
