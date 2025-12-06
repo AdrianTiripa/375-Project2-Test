@@ -104,7 +104,12 @@ void Cache::invalidate(uint64_t address){
     uint64_t index = (address >> blockOffsetBits) & ((1 << indexBits) - 1);
     uint64_t tag = address >> (blockOffsetBits + indexBits);
 
-    validBits[index][tag]=false;
+    for(int i=0; i<config.ways; i++){
+        if(validBits[index][i] && cacheArray[index][i] == tag){
+            validBits[index][i] = false; // invalidate the block
+            break;
+        }
+    }
 }
 
 // debug: dump information as you needed, here are some examples
