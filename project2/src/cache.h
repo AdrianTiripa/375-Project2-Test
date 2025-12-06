@@ -5,6 +5,8 @@
 #include "Utilities.h"
 #include <cmath>
 
+using namespace std;
+
 struct CacheConfig {
     // Cache size in bytes.
     uint64_t cacheSize;
@@ -52,9 +54,9 @@ public:
     uint64_t getMisses() { return misses; }
     void invalidate(uint64_t address);
 
-    std::vector<vector<uint64_t>> cacheArray; // model for cache
-    std::vector<vector<bool>> validBits; // valid bits for each cache block
-    std::vector<uint64_t> LRUCounter; // keeps track of LRU for each set
+    vector<vector<uint64_t>> cacheArray; // model for cache
+    vector<vector<bool>> validBits; // valid bits for each cache block
+    vector<uint64_t> LRUCounter; // keeps track of LRU for each set
 
     uint64_t numSets;
     uint64_t numBlocks;
