@@ -58,9 +58,9 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
 // cache
 
 // keep track of the number of cycles stall is applied
-static int loadStallCount = 0;
-static int iCacheStallCycles = 0;
-static int dCacheStallCycles = 0;
+static uint64_t loadStallCount = 0;
+static uint64_t iCacheStallCycles = 0;
+static uint64_t dCacheStallCycles = 0;
 
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
@@ -93,8 +93,8 @@ Status runCycles(uint64_t cycles) {
 
         // Checks for a dCache Miss
         // QUESTION: Do we have to implement zero register nullification?
-        bool dCacheStall = exPrev.readsMem && !dCache->access(exPrev.memAddress, CACHE_READ) ||
-                            exPrev.writesMem && !dCache->access(exPrev.memAddress, CACHE_WRITE);
+        bool dCacheStall = (exPrev.readsMem && !dCache->access(exPrev.memAddress, CACHE_READ)) ||
+                            (exPrev.writesMem && !dCache->access(exPrev.memAddress, CACHE_WRITE));
 
         // Case: Currently stalling for dCache miss latency
         if(dCacheStallCycles != 0){
@@ -104,21 +104,21 @@ Status runCycles(uint64_t cycles) {
         
         // Case: dCache miss on current cycle
         else if (dCacheStall){
-            bool memError = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writeMem
+            bool memError = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem
                         && pipelineInfo.memInst.memAddress >= MEMORY_SIZE);
 
              // Case: Just cache miss, memory in bounds
             if(!memError){
                 pipelineInfo.wbInst = nop(BUBBLE);
                 pipelineInfo.memInst = simulator->simMEM(exPrev);
-                dCacheStallCycles = dCache->config->missLatency;
+                dCacheStallCycles = dCache->config.missLatency;
             } 
             // Case: Memory out of bounds
             else {
                 pipelineInfo.wbInst = simulator->simWB(memPrev);
-                pipelineInfo.memInst = NOP(SQUASHED);
-                pipelineInfo.exInst = NOP(SQUASHED);
-                pipelineInfo.idInst = NOP(SQUASHED);
+                pipelineInfo.memInst = nop(SQUASHED);
+                pipelineInfo.exInst = nop(SQUASHED);
+                pipelineInfo.idInst = nop(SQUASHED);
                 pipelineInfo.ifInst = simulator->simIF(0x8000);
                 status = ERROR;
             }
@@ -185,7 +185,7 @@ Status runCycles(uint64_t cycles) {
             else if(loadBranch){
                 // Handle forwarding from the memory register to the ID stage
                 pipelineInfo.idInst.op1Val = (pipelineInfo.wbInst.writesRd && (pipelineInfo.wbInst.rd == idPrev.rs1)) 
-                                                ? pipelineInfo.mwbInst.memResult:
+                                                ? pipelineInfo.wbInst.memResult:
                                                 pipelineInfo.idInst.op1Val;
                 pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
                                                 ? pipelineInfo.memInst.memResult:
@@ -228,14 +228,14 @@ Status runCycles(uint64_t cycles) {
                     PC then we are to abort the stall cycles for the 
                     */
                     if(iCacheStallCycles!=0){
-                        invalidate(PC);
+                        iCache.invalidate(PC);
                         iCacheStallCycles = 0; 
                     }
                     PC = idPrev.nextPC;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // Case: New PC misses in iCache
-                    if(!access(PC, CACHE_READ)) 
-                        iCacheStallCycles = iCache->config->missLatency;
+                    if(!iCache.access(PC, CACHE_READ)) 
+                        iCacheStallCycles = iCache->config.missLatency;
                     
                 }
 
@@ -256,9 +256,9 @@ Status runCycles(uint64_t cycles) {
                         iCacheStallCycles--;
                     }
                     // Case: iCache miss
-                    else if(!iCache->access(PC, CACHE_READ)) {
+                    else if(!iCache.access(PC, CACHE_READ)) {
                         pipelineInfo.idInst = nop(BUBBLE);
-                        iCacheStallCycles = iCache->config->missLatency;
+                        iCacheStallCycles = iCache->config.missLatency;
                     } 
                     pipelineInfo.ifInst = simulator->simIF(PC);
                 }
@@ -311,7 +311,7 @@ Status runTillHalt() {
 Status finalizeSimulator() {
     simulator->dumpRegMem(output);
     SimulationStats stats{simulator->getDin(),  cycleCount, iCache->getHits(), 
-                iCache->getMisses(), dCache->getHits(), dCache->getMisses(), loadStallCount}; 
+                iCache->getMisses(), dCache->getHits(), dCache->getMisses(), (loadStallCount}; 
     dumpSimStats(stats, output);
     return SUCCESS;
 }
