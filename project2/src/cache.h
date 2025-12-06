@@ -52,9 +52,9 @@ public:
     uint64_t getMisses() { return misses; }
     void invalidate(uint64_t address);
 
-    vector<vector<uint64_t>> cacheArray; // model for cache
-    vector<vector<bool>> validBits; // valid bits for each cache block
-    vector<uint64_t> LRUCounter; // keeps track of LRU for each set
+    std::vector<vector<uint64_t>> cacheArray; // model for cache
+    std::vector<vector<bool>> validBits; // valid bits for each cache block
+    std::vector<uint64_t> LRUCounter; // keeps track of LRU for each set
 
     uint64_t numSets;
     uint64_t numBlocks;
