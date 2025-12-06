@@ -29,13 +29,13 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     // cacheSize/blockSize gives number of blocks
     // (cacheSize/blockSize)/ways gives number of sets
     // configParam.ways gives number of blocks per set
-    vector<vector<uint64_t>> cacheArray(numSets, vector<uint64_t>(config.ways, 0));
+    cacheArray.assign(numSets, vector<uint64_t>(config.ways, 0));
 
     // follows from above, every entry is set to false initially
-    vector<vector<bool>> validBits(numSets,vector<bool>(config.ways, false));
+    validBits.assign(numSets,vector<bool>(config.ways, false));
 
     // initialize LRU counters to 0, there is one counter per set
-    vector<uint64_t> LRUCounter(numSets, 0);
+    LRUCounter.assign(numSets, 0);
 
 }
 
