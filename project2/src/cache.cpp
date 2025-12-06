@@ -3,6 +3,7 @@
 
 #include "cache.h"
 #include <random>
+#include <vector>
 
 using namespace std;
 
