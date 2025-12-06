@@ -3,10 +3,12 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Utilities.h"
 #include "cache.h"
 #include "simulator.h"
+
 
 static Simulator* simulator = nullptr;
 static Cache* iCache = nullptr;
@@ -227,9 +229,9 @@ Status runCycles(uint64_t cycles) {
                     */
                     if(iCacheStallCycles!=0){
                         invalidate(PC);
+                        iCacheStallCycles = 0; 
                     }
                     PC = idPrev.nextPC;
-                    iCacheStallCycles = 0;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // Case: New PC misses in iCache
                     if(!access(PC, CACHE_READ)) 
