@@ -32,7 +32,7 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     vector<vector<uint64_t>> cacheArray(numSets, vector<uint64_t>(config.ways, 0));
 
     // follows from above, every entry is set to false initially
-    vector<vector<bool>> validBits(numSets, (config.ways, false));
+    vector<vector<bool>> validBits(numSets,vector<bool>(config.ways, false));
 
     // initialize LRU counters to 0, there is one counter per set
     vector<uint64_t> LRUCounter(numSets, 0);

@@ -314,7 +314,7 @@ Status runTillHalt() {
 Status finalizeSimulator() {
     simulator->dumpRegMem(output);
     SimulationStats stats{simulator->getDin(),  cycleCount, iCache->getHits(), 
-                iCache->getMisses(), dCache->getHits(), dCache->getMisses(), (loadStallCount}; 
+                iCache->getMisses(), dCache->getHits(), dCache->getMisses(), (loadStallCount)}; 
     dumpSimStats(stats, output);
     return SUCCESS;
 }
