@@ -29,13 +29,13 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     // cacheSize/blockSize gives number of blocks
     // (cacheSize/blockSize)/ways gives number of sets
     // configParam.ways gives number of blocks per set
-    cacheArray = vector<vector<uint64_t>>(numSets, vector<uint64_t>(config.ways, 0));
+    vector<vector<uint64_t>> cacheArray(numSets, vector<uint64_t>(config.ways, 0));
 
     // follows from above, every entry is set to false initially
-    validBits = vector<vector<bool>>(numSets, (config.ways, false));
+    vector<vector<bool>> validBits(numSets, (config.ways, false));
 
     // initialize LRU counters to 0, there is one counter per set
-    LRUCounter = vector<uint64_t>(numSets, 0);
+    vector<uint64_t> LRUCounter(numSets, 0);
 
 }
 
@@ -54,7 +54,7 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
 
     // look for hit in the corresponding set
     bool hit = false;
-    for(int i=0; i<config.ways; i++) {
+    for(uint64_t i = 0; i < config.ways; i++) {
         if(validBits[index][i] && cacheArray[index][i] == tag) {
             hit = true;
             hits++;
@@ -93,7 +93,7 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
 }
 
 
-void invalidate(uint64_t address){
+void Cache::invalidate(uint64_t address){
     // find tag, index, block offset sizes
     uint64_t blockOffsetBits = log2(config.blockSize);
     uint64_t indexBits = log2(numSets); // not sure of the signature

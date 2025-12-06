@@ -104,8 +104,8 @@ Status runCycles(uint64_t cycles) {
         
         // Case: dCache miss on current cycle
         else if (dCacheStall){
-            bool memError = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem
-                        && pipelineInfo.memInst.memAddress >= MEMORY_SIZE);
+            bool memError = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem)
+                        && pipelineInfo.memInst.memAddress >= MEMORY_SIZE;
 
              // Case: Just cache miss, memory in bounds
             if(!memError){
@@ -160,7 +160,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
-                iCacheStallCycles = max(0, iCacheStallCycles - 1);
+                if(iCacheStallCycles != 0)
+                    iCacheStallCycles - 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
             } 
@@ -174,7 +175,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (exPrev.writesRd && (exPrev.rd == idPrev.rs2)) 
                                                 ? exPrev.arithResult:
                                                 pipelineInfo.idInst.op2Val;
-                iCacheStallCycles = max(0, iCacheStallCycles - 1);
+                if(iCacheStallCycles != 0)
+                    iCacheStallCycles - 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // Update PC Resolution
@@ -190,7 +192,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
-                iCacheStallCycles = max(0, iCacheStallCycles - 1);
+                if(iCacheStallCycles != 0)
+                    iCacheStallCycles - 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // update PC resolution if needed
@@ -228,13 +231,13 @@ Status runCycles(uint64_t cycles) {
                     PC then we are to abort the stall cycles for the 
                     */
                     if(iCacheStallCycles!=0){
-                        iCache.invalidate(PC);
+                        iCache->invalidate(PC);
                         iCacheStallCycles = 0; 
                     }
                     PC = idPrev.nextPC;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // Case: New PC misses in iCache
-                    if(!iCache.access(PC, CACHE_READ)) 
+                    if(!iCache->access(PC, CACHE_READ)) 
                         iCacheStallCycles = iCache->config.missLatency;
                     
                 }
@@ -256,7 +259,7 @@ Status runCycles(uint64_t cycles) {
                         iCacheStallCycles--;
                     }
                     // Case: iCache miss
-                    else if(!iCache.access(PC, CACHE_READ)) {
+                    else if(!iCache->access(PC, CACHE_READ)) {
                         pipelineInfo.idInst = nop(BUBBLE);
                         iCacheStallCycles = iCache->config.missLatency;
                     } 
