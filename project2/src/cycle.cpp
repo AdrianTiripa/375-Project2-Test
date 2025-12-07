@@ -188,7 +188,10 @@ Status runCycles(uint64_t cycles) {
                     // D-cache miss: start stall for this load/store
                     dCacheStallCycles = dCache->config.missLatency;
                     pipelineInfo.memInst = simulator->simMEM(exPrev);
-                    // WB remains bubble this cycle
+                    // older MEM instruction should still retire this cycle
+                    if (!iStall) {
+                        pipelineInfo.wbInst = simulator->simWB(memPrev);
+                    }
                 } else {
                     // D-cache hit: normal MEM
                     pipelineInfo.memInst = simulator->simMEM(exPrev);
