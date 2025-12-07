@@ -15,7 +15,8 @@ Simulator::Simulator() {
 }
 
 Simulator::~Simulator() {
-    if (memory) delete memory;
+    // memory is owned by the caller (e.g., main / cycle), so we should not delete it here
+    // if (memory) delete memory;
 }
 
 // dump registers and memory
@@ -423,6 +424,15 @@ Simulator::Instruction Simulator::simMemAccess(Instruction inst, MemoryStore *my
 
 // Write back results to registers
 Simulator::Instruction Simulator::simCommit(Instruction inst, REGS &regData) {
+    // x0 must always be 0
+    regData.registers[0] = 0;
+
+    // only instructions that actually write a register should update the regfile
+    // and never write to x0
+    if (!inst.writesRd || inst.rd == 0) {
+        return inst;
+    }
+
     if (inst.readsMem) {
         regData.registers[inst.rd] = inst.memResult;
     } else {
