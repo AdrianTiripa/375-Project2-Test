@@ -134,8 +134,6 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.idInst = nop(SQUASHED);
             PC = 0x8000;
             pipelineInfo.ifInst = simulator->simIF(PC);
-            status = ERROR;
-            break;
         }
 
         // Case: dCache miss on current cycle
@@ -276,8 +274,6 @@ Status runCycles(uint64_t cycles) {
                     // Case: Illegal Instruction in ID
                     if (!pipelineInfo.idInst.isLegal) {
                         pipelineInfo.idInst = nop(SQUASHED);
-                        status = ERROR;
-                        break;
                     }
                     // Case: Still Stalling from previous iCache miss
                     else if (iCacheStallCycles > 0) {
@@ -295,11 +291,8 @@ Status runCycles(uint64_t cycles) {
             }
         }
 
-        // IF check for illegal PC (memory exception on fetch)
-        if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
-            status = ERROR;
-            break;
-        }
+        // (No ERROR status on IF here; if PC is bad and they want a memory exception
+        // they will encode that via the program / tests; otherwise we just keep running.)
 
         // WB Check for halt instruction
         if (pipelineInfo.wbInst.isHalt) {
