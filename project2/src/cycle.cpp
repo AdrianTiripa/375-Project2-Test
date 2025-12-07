@@ -136,7 +136,7 @@ Status runCycles(uint64_t cycles) {
 
             dCacheStallCycles--;
 
-            // allow I-cache miss latency to advance even while D-stalling
+            // let I-cache miss latency count down even while D-stalling
             if (iStall && iCacheStallCycles > 0) {
                 iCacheStallCycles--;
             }
@@ -418,7 +418,7 @@ Status runTillHalt() {
     Status status;
     while (true) {
         status = static_cast<Status>(runCycles(1));
-        if (status == HALT) break;
+        if (status == HALT || status == ERROR) break;
     }
     return status;
 }
