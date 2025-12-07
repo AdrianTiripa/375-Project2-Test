@@ -59,12 +59,6 @@ static void forwarding(uint64_t rs, bool readsRs, uint64_t &opVal,
     }
 }
 
-// keep track of stall cycles
-static uint64_t stallCyclesCount   = 0;  // extra cycle for load-branch
-static uint64_t loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
-static uint64_t iCacheStallCycles  = 0;
-static uint64_t dCacheStallCycles  = 0;
-
 // initialize the simulator
 Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, MemoryStore* mem,
                      const std::string& output_name) {
@@ -83,13 +77,14 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     pipelineInfo.memInst = nop(IDLE);
     pipelineInfo.wbInst  = nop(IDLE);
 
-    stallCyclesCount   = 0;
-    loadStallCount     = 0;
-    iCacheStallCycles  = 0;
-    dCacheStallCycles  = 0;
-
     return SUCCESS;
 }
+
+// keep track of stall cycles
+static uint64_t stallCyclesCount   = 0;  // extra cycle for load-branch
+static uint64_t loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
+static uint64_t iCacheStallCycles  = 0;
+static uint64_t dCacheStallCycles  = 0;
 
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
@@ -136,11 +131,6 @@ Status runCycles(uint64_t cycles) {
 
             dCacheStallCycles--;
 
-            // allow I-cache miss latency to advance even while D-stalling
-            if (iStall && iCacheStallCycles > 0) {
-                iCacheStallCycles--;
-            }
-
             // IF check for illegal PC (safe: no simIF call here)
             if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
                 pipelineInfo.ifInst = simulator->simIF(0x8000);
@@ -165,7 +155,7 @@ Status runCycles(uint64_t cycles) {
             pipeState.wbStatus  = pipelineInfo.wbInst.status;
             dumpPipeState(pipeState, output);
 
-            if (status == HALT || status == ERROR) return status;
+            if (status == HALT) return status;
             continue;
         } else {
             // no D-stall: normal MEM/WB path
@@ -359,16 +349,11 @@ Status runCycles(uint64_t cycles) {
         } else if (StallID) {
             // hold IF during data stall
             pipelineInfo.ifInst = ifPrev;
-            if (iStall && iCacheStallCycles > 0) {
-                iCacheStallCycles--;
-            }
         } else if (!squashIF) {
             if (iStall) {
                 // I-cache miss in progress, hold IF
                 pipelineInfo.ifInst = ifPrev;
-                if (iCacheStallCycles > 0) {
-                    iCacheStallCycles--;
-                }
+                iCacheStallCycles--;
             } else {
                 // normal fetch with I-cache access
                 if (PC >= MEMORY_SIZE) {
