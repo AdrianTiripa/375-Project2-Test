@@ -319,27 +319,27 @@ Status runCycles(uint64_t cycles) {
         if (dStall || StallID) {
             // hold IF while MEM or ID is stalled
             pipelineInfo.ifInst = ifPrev;
-        } else if (!squashIF) {
+            } else if (!squashIF) {
             if (iStall) {
                 // I-cache miss in progress: hold IF
                 pipelineInfo.ifInst = ifPrev;
                 iCacheStallCycles--;
             } else {
                 // normal speculative fetch with I-cache access
-                bool hit = iCache->access(PC, CACHE_READ);
-                pipelineInfo.ifInst = simulator->simIF(PC);
-                pipelineInfo.ifInst.status = SPECULATIVE;
-                if (!hit) {
-                    iCacheStallCycles = iCache->config.missLatency;
+                if (PC >= MEMORY_SIZE) {
+                    pipelineInfo.ifInst = simulator->simIF(0x8000);
+                    status = ERROR;
+                } else {
+                    bool hit = iCache->access(PC, CACHE_READ);
+                    pipelineInfo.ifInst = simulator->simIF(PC);
+                    pipelineInfo.ifInst.status = SPECULATIVE;
+                    if (!hit) {
+                        iCacheStallCycles = iCache->config.missLatency;
+                    }
                 }
             }
         }
 
-        // IF check for illegal PC
-        if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
-            pipelineInfo.ifInst = simulator->simIF(0x8000);
-            status = ERROR;
-        }
 
         // WB check for halt instruction
         if (pipelineInfo.wbInst.isHalt) {
