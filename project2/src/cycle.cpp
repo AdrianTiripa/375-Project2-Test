@@ -317,9 +317,17 @@ Status runCycles(uint64_t cycles) {
             newIdInst = simulator->simID(ifPrev);
         }
 
+        // robust HALT detection: ensure 0xfeedfeed is treated as legal HALT
+        if (newIdInst.instruction == 0xfeedfeed) {
+            newIdInst.isHalt  = true;
+            newIdInst.isLegal = true;
+        }
+
         // illegal instruction exception in ID
-        if (!StallID && !iStall && !newIdInst.isLegal) {
-            illegalInID        = true;
+        if (!StallID && !iStall &&
+            !newIdInst.isLegal &&
+            newIdInst.instruction != 0xfeedfeed) { // don't treat HALT as illegal
+            illegalInID         = true;
             pipelineInfo.idInst = nop(SQUASHED);
             pipelineInfo.ifInst = nop(SQUASHED);
             PC                  = 0x8000;
@@ -387,7 +395,8 @@ Status runCycles(uint64_t cycles) {
         // else squashIF already set IF to NOP (squashed)
 
         // WB check for halt
-        if (pipelineInfo.wbInst.isHalt) {
+        if (pipelineInfo.wbInst.isHalt ||
+            pipelineInfo.wbInst.instruction == 0xfeedfeed) {
             status = HALT;
             goto dump_state;
         }
