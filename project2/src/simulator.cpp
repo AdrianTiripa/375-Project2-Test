@@ -423,10 +423,14 @@ Simulator::Instruction Simulator::simMemAccess(Instruction inst, MemoryStore *my
 
 // Write back results to registers
 Simulator::Instruction Simulator::simCommit(Instruction inst, REGS &regData) {
-    if (inst.readsMem) {
-        regData.registers[inst.rd] = inst.memResult;
-    } else {
-        regData.registers[inst.rd] = inst.arithResult;
+    // Only write back when the instruction is supposed to write a register,
+    // and never to x0 (register 0).
+    if (inst.writesRd && inst.rd != 0) {
+        if (inst.readsMem) {
+            regData.registers[inst.rd] = inst.memResult;
+        } else {
+            regData.registers[inst.rd] = inst.arithResult;
+        }
     }
     return inst;
 }
