@@ -190,14 +190,13 @@ Status runCycles(uint64_t cycles) {
                 // older MEM -> WB still happens
                 pipelineInfo.wbInst  = simulator->simWB(memPrev);
 
-                // squash younger stages
+                // squash younger stages (including the excepting instruction in MEM)
                 pipelineInfo.memInst = nop(SQUASHED);
                 pipelineInfo.exInst  = nop(SQUASHED);
                 pipelineInfo.idInst  = nop(SQUASHED);
                 pipelineInfo.ifInst  = nop(SQUASHED);
 
-                PC     = 0x8000;
-                status = ERROR;
+                PC = 0x8000;
 
                 iCacheStallCycles = 0;
                 dCacheStallCycles = 0;
@@ -209,7 +208,7 @@ Status runCycles(uint64_t cycles) {
 
                 if (!hit) {
                     // new D-cache miss
-                    dCacheStallCycles   = dCache->config.missLatency;
+                    dCacheStallCycles    = dCache->config.missLatency;
                     pipelineInfo.memInst = simulator->simMEM(exToMem);
                     pipelineInfo.wbInst  = simulator->simWB(memPrev);
                 } else {
@@ -270,8 +269,8 @@ Status runCycles(uint64_t cycles) {
                 idPrevIsBranch &&
                 (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) &&
                 !StallID) {
-                StallID        = true;
-                BubbleEx       = true;
+                StallID          = true;
+                BubbleEx         = true;
                 stallCyclesCount = 1;
                 loadStallCount++;
             }
@@ -319,12 +318,11 @@ Status runCycles(uint64_t cycles) {
 
         // illegal instruction exception in ID
         if (!StallID && !iStall && !newIdInst.isLegal) {
-            illegalInID        = true;
+            illegalInID         = true;
             pipelineInfo.idInst = nop(SQUASHED);
             pipelineInfo.ifInst = nop(SQUASHED);
             PC                  = 0x8000;
             iCacheStallCycles   = 0;
-            status              = ERROR;
         }
 
         // PC + IF control
@@ -417,7 +415,7 @@ dump_state:
 Status runTillHalt() {
     Status status;
     while (true) {
-        status = static_cast<Status>(runCycles(1));
+        status = runCycles(1);
         if (status == HALT || status == ERROR) break;
     }
     return status;
@@ -425,7 +423,6 @@ Status runTillHalt() {
 
 // dump the state of the simulator
 Status finalizeSimulator() {
-    simulator->dumpRegMem(output);
     SimulationStats stats{simulator->getDin(),
                           cycleCount,
                           iCache->getHits(),
@@ -433,6 +430,12 @@ Status finalizeSimulator() {
                           dCache->getHits(),
                           dCache->getMisses(),
                           loadStallCount};
+
+    // First dump statistics
     dumpSimStats(stats, output);
+
+    // Then registers and memory (helper provided by Simulator)
+    simulator->dumpRegMem(output);
+
     return SUCCESS;
 }
