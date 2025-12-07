@@ -99,8 +99,8 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
     // For simplicity, we're using a random boolean to simulate cache hit/miss
     /*bool hit = distribution(generator) < 0.20;  // random 20% hit for a strange cache
     hits += hit;
-    misses += !hit;
-    return hit;*/
+    misses += !hit;*/
+    return hit;
 }
 
 
