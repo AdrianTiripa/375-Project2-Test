@@ -67,6 +67,16 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     simulator->setMemory(mem);
     iCache = new Cache(iCacheConfig, I_CACHE);
     dCache = new Cache(dCacheConfig, D_CACHE);
+
+    // reset global state
+    cycleCount = 0;
+    PC = 0;
+    pipelineInfo.ifInst  = nop(IDLE);
+    pipelineInfo.idInst  = nop(IDLE);
+    pipelineInfo.exInst  = nop(IDLE);
+    pipelineInfo.memInst = nop(IDLE);
+    pipelineInfo.wbInst  = nop(IDLE);
+
     return SUCCESS;
 }
 
@@ -121,7 +131,7 @@ Status runCycles(uint64_t cycles) {
 
             dCacheStallCycles--;
 
-            // IF check for illegal PC
+            // IF check for illegal PC (safe: no simIF call here)
             if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
                 pipelineInfo.ifInst = simulator->simIF(0x8000);
                 status = ERROR;
@@ -346,21 +356,20 @@ Status runCycles(uint64_t cycles) {
                 iCacheStallCycles--;
             } else {
                 // normal fetch with I-cache access
-                bool hit = iCache->access(PC, CACHE_READ);
-                pipelineInfo.ifInst = simulator->simIF(PC);
-                pipelineInfo.ifInst.status = SPECULATIVE;
-                if (!hit) {
-                    iCacheStallCycles = iCache->config.missLatency;
+                if (PC >= MEMORY_SIZE) {
+                    pipelineInfo.ifInst = simulator->simIF(0x8000);
+                    status = ERROR;
+                } else {
+                    bool hit = iCache->access(PC, CACHE_READ);
+                    pipelineInfo.ifInst = simulator->simIF(PC);
+                    pipelineInfo.ifInst.status = SPECULATIVE;
+                    if (!hit) {
+                        iCacheStallCycles = iCache->config.missLatency;
+                    }
                 }
             }
         }
         // else squashIF already set IF to NOP (squashed)
-
-        // IF check for illegal PC
-        if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
-            pipelineInfo.ifInst = simulator->simIF(0x8000);
-            status = ERROR;
-        }
 
         // WB check for halt
         if (pipelineInfo.wbInst.isHalt) {
@@ -382,7 +391,7 @@ dump_state:
         pipeState.wbStatus  = pipelineInfo.wbInst.status;
         dumpPipeState(pipeState, output);
 
-        if (status == HALT) return status;
+        if (status == HALT || status == ERROR) return status;
     }
 
     return status;
