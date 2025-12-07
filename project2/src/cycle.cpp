@@ -71,10 +71,10 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
 }
 
 // keep track of stall cycles
-static int stallCyclesCount   = 0;  // extra cycle for load-branch
-static int loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
-static int iCacheStallCycles  = 0;
-static int dCacheStallCycles  = 0;
+static uint64_t stallCyclesCount   = 0;  // extra cycle for load-branch
+static uint64_t loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
+static uint64_t iCacheStallCycles  = 0;
+static uint64_t dCacheStallCycles  = 0;
 
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
@@ -98,6 +98,12 @@ Status runCycles(uint64_t cycles) {
         bool BubbleEx   = false;
         bool squashIF   = false;
         bool skipRest   = false;
+
+        bool idPrevIsBranch;
+        bool idPrevIsStore;
+        bool branchTaken;
+        Simulator::Instruction newIdInst; // what will be in ID
+        bool illegalInID;
 
         bool iStall     = (iCacheStallCycles > 0);
         bool dStall     = (dCacheStallCycles > 0);
@@ -203,11 +209,11 @@ Status runCycles(uint64_t cycles) {
         }
 
         // Hazard detection
-        bool idPrevIsBranch = (idPrev.opcode == OP_BRANCH) ||
-                              (idPrev.opcode == OP_JAL)    ||
-                              (idPrev.opcode == OP_JALR);
+        idPrevIsBranch = (idPrev.opcode == OP_BRANCH) ||
+                         (idPrev.opcode == OP_JAL)    ||
+                         (idPrev.opcode == OP_JALR);
 
-        bool idPrevIsStore  = idPrev.writesMem && !idPrev.readsMem;
+        idPrevIsStore  = idPrev.writesMem && !idPrev.readsMem;
 
         if (stallCyclesCount > 0) {
             // extra stall cycle for load-branch
@@ -264,7 +270,7 @@ Status runCycles(uint64_t cycles) {
         }
 
         // ID + branches (predict always not taken)
-        bool branchTaken = false;
+        branchTaken = false;
 
         if (idPrevIsBranch) {
             // forwarding for branch in ID
@@ -281,8 +287,7 @@ Status runCycles(uint64_t cycles) {
         }
 
         // ID update (from IF)
-        Simulator::Instruction newIdInst; // what will be in ID
-        bool illegalInID = false;
+        illegalInID = false;
 
         if (StallID || iStall) {
             // some stall, hold ID
