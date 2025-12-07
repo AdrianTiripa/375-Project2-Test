@@ -59,12 +59,6 @@ static void forwarding(uint64_t rs, bool readsRs, uint64_t &opVal,
     }
 }
 
-// keep track of stall cycles
-static uint64_t stallCyclesCount   = 0;  // extra cycle for load-branch
-static uint64_t loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
-static uint64_t iCacheStallCycles  = 0;
-static uint64_t dCacheStallCycles  = 0;
-
 // initialize the simulator
 Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, MemoryStore* mem,
                      const std::string& output_name) {
@@ -73,23 +67,14 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     simulator->setMemory(mem);
     iCache = new Cache(iCacheConfig, I_CACHE);
     dCache = new Cache(dCacheConfig, D_CACHE);
-
-    // reset global state
-    cycleCount = 0;
-    PC = 0;
-    pipelineInfo.ifInst  = nop(IDLE);
-    pipelineInfo.idInst  = nop(IDLE);
-    pipelineInfo.exInst  = nop(IDLE);
-    pipelineInfo.memInst = nop(IDLE);
-    pipelineInfo.wbInst  = nop(IDLE);
-
-    stallCyclesCount   = 0;
-    loadStallCount     = 0;
-    iCacheStallCycles  = 0;
-    dCacheStallCycles  = 0;
-
     return SUCCESS;
 }
+
+// keep track of stall cycles
+static uint64_t stallCyclesCount   = 0;  // extra cycle for load-branch
+static uint64_t loadStallCount     = 0;  // number of load stalls (load-use + load-branch)
+static uint64_t iCacheStallCycles  = 0;
+static uint64_t dCacheStallCycles  = 0;
 
 Status runCycles(uint64_t cycles) {
     uint64_t count = 0;
@@ -136,12 +121,7 @@ Status runCycles(uint64_t cycles) {
 
             dCacheStallCycles--;
 
-            // allow I-cache miss latency to advance even while D-stalling
-            if (iStall && iCacheStallCycles > 0) {
-                iCacheStallCycles--;
-            }
-
-            // IF check for illegal PC (safe: no simIF call here)
+            // IF check for illegal PC
             if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
                 pipelineInfo.ifInst = simulator->simIF(0x8000);
                 status = ERROR;
@@ -165,7 +145,7 @@ Status runCycles(uint64_t cycles) {
             pipeState.wbStatus  = pipelineInfo.wbInst.status;
             dumpPipeState(pipeState, output);
 
-            if (status == HALT || status == ERROR) return status;
+            if (status == HALT) return status;
             continue;
         } else {
             // no D-stall: normal MEM/WB path
@@ -190,13 +170,14 @@ Status runCycles(uint64_t cycles) {
                 // older MEM -> WB still happens
                 pipelineInfo.wbInst  = simulator->simWB(memPrev);
 
-                // squash younger stages (including the excepting instruction in MEM)
+                // squash younger stages
                 pipelineInfo.memInst = nop(SQUASHED);
                 pipelineInfo.exInst  = nop(SQUASHED);
                 pipelineInfo.idInst  = nop(SQUASHED);
                 pipelineInfo.ifInst  = nop(SQUASHED);
 
-                PC = 0x8000;
+                PC     = 0x8000;
+                status = ERROR;
 
                 iCacheStallCycles = 0;
                 dCacheStallCycles = 0;
@@ -208,7 +189,7 @@ Status runCycles(uint64_t cycles) {
 
                 if (!hit) {
                     // new D-cache miss
-                    dCacheStallCycles    = dCache->config.missLatency;
+                    dCacheStallCycles   = dCache->config.missLatency;
                     pipelineInfo.memInst = simulator->simMEM(exToMem);
                     pipelineInfo.wbInst  = simulator->simWB(memPrev);
                 } else {
@@ -241,8 +222,8 @@ Status runCycles(uint64_t cycles) {
             stallCyclesCount--;
         } else {
             // load-use (1 cycle)
-            bool hazardRs1 = (idPrev.rs1 == exPrev.rd);
-            bool hazardRs2 = (idPrev.rs2 == exPrev.rd);
+            bool hazardRs1 = idPrev.readsRs1 && (idPrev.rs1 == exPrev.rd);
+            bool hazardRs2 = idPrev.readsRs2 && (idPrev.rs2 == exPrev.rd);
 
             bool loadUse = exPrev.readsMem && exPrev.writesRd &&
                            exPrev.rd != 0 &&
@@ -259,7 +240,8 @@ Status runCycles(uint64_t cycles) {
             // arith-branch (1 cycle)
             if (exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0 &&
                 idPrevIsBranch && !StallID &&
-                (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd)) {
+                ((idPrev.readsRs1 && idPrev.rs1 == exPrev.rd) ||
+                 (idPrev.readsRs2 && idPrev.rs2 == exPrev.rd))) {
                 StallID  = true;
                 BubbleEx = true;
             }
@@ -267,10 +249,11 @@ Status runCycles(uint64_t cycles) {
             // load-branch (2 cycles total)
             if (exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0 &&
                 idPrevIsBranch &&
-                (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) &&
+                ((idPrev.readsRs1 && idPrev.rs1 == exPrev.rd) ||
+                 (idPrev.readsRs2 && idPrev.rs2 == exPrev.rd)) &&
                 !StallID) {
-                StallID          = true;
-                BubbleEx         = true;
+                StallID        = true;
+                BubbleEx       = true;
                 stallCyclesCount = 1;
                 loadStallCount++;
             }
@@ -318,11 +301,12 @@ Status runCycles(uint64_t cycles) {
 
         // illegal instruction exception in ID
         if (!StallID && !iStall && !newIdInst.isLegal) {
-            illegalInID         = true;
+            illegalInID        = true;
             pipelineInfo.idInst = nop(SQUASHED);
             pipelineInfo.ifInst = nop(SQUASHED);
             PC                  = 0x8000;
             iCacheStallCycles   = 0;
+            status              = ERROR;
         }
 
         // PC + IF control
@@ -357,32 +341,28 @@ Status runCycles(uint64_t cycles) {
         } else if (StallID) {
             // hold IF during data stall
             pipelineInfo.ifInst = ifPrev;
-            if (iStall && iCacheStallCycles > 0) {
-                iCacheStallCycles--;
-            }
         } else if (!squashIF) {
             if (iStall) {
                 // I-cache miss in progress, hold IF
                 pipelineInfo.ifInst = ifPrev;
-                if (iCacheStallCycles > 0) {
-                    iCacheStallCycles--;
-                }
+                iCacheStallCycles--;
             } else {
                 // normal fetch with I-cache access
-                if (PC >= MEMORY_SIZE) {
-                    pipelineInfo.ifInst = simulator->simIF(0x8000);
-                    status = ERROR;
-                } else {
-                    bool hit = iCache->access(PC, CACHE_READ);
-                    pipelineInfo.ifInst = simulator->simIF(PC);
-                    pipelineInfo.ifInst.status = SPECULATIVE;
-                    if (!hit) {
-                        iCacheStallCycles = iCache->config.missLatency;
-                    }
+                bool hit = iCache->access(PC, CACHE_READ);
+                pipelineInfo.ifInst = simulator->simIF(PC);
+                pipelineInfo.ifInst.status = SPECULATIVE;
+                if (!hit) {
+                    iCacheStallCycles = iCache->config.missLatency;
                 }
             }
         }
         // else squashIF already set IF to NOP (squashed)
+
+        // IF check for illegal PC
+        if (pipelineInfo.ifInst.PC >= MEMORY_SIZE) {
+            pipelineInfo.ifInst = simulator->simIF(0x8000);
+            status = ERROR;
+        }
 
         // WB check for halt
         if (pipelineInfo.wbInst.isHalt) {
@@ -404,7 +384,7 @@ dump_state:
         pipeState.wbStatus  = pipelineInfo.wbInst.status;
         dumpPipeState(pipeState, output);
 
-        if (status == HALT || status == ERROR) return status;
+        if (status == HALT) return status;
     }
 
     return status;
@@ -415,14 +395,16 @@ dump_state:
 Status runTillHalt() {
     Status status;
     while (true) {
-        status = runCycles(1);
+        status = static_cast<Status>(runCycles(1));
         if (status == HALT || status == ERROR) break;
     }
     return status;
 }
 
+
 // dump the state of the simulator
 Status finalizeSimulator() {
+    simulator->dumpRegMem(output);
     SimulationStats stats{simulator->getDin(),
                           cycleCount,
                           iCache->getHits(),
@@ -430,12 +412,6 @@ Status finalizeSimulator() {
                           dCache->getHits(),
                           dCache->getMisses(),
                           loadStallCount};
-
-    // First dump statistics
     dumpSimStats(stats, output);
-
-    // Then registers and memory (helper provided by Simulator)
-    simulator->dumpRegMem(output);
-
     return SUCCESS;
 }
