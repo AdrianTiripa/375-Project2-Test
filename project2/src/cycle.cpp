@@ -1,4 +1,4 @@
-#include "cycle.h" 
+#include "cycle.h"
 
 #include <iostream>
 #include <memory>
@@ -114,33 +114,9 @@ Status runCycles(uint64_t cycles) {
         if (dStall) {
             // D-cache stall in progress: hold MEM, do not advance the miss
             pipelineInfo.memInst = memPrev;
-            pipelineInfo.exInst  = exPrev;   // hold EX
-            pipelineInfo.idInst  = idPrev;   // hold ID
-            pipelineInfo.ifInst  = ifPrev;   // hold IF
             // older instruction in WB still advances
             pipelineInfo.wbInst = simulator->simWB(memPrev);
             dCacheStallCycles--;
-
-            // WB check for halt instruction
-            if (pipelineInfo.wbInst.isHalt) {
-                status = HALT;
-            }
-
-            // dump pipeline state for this cycle
-            pipeState.ifPC      = pipelineInfo.ifInst.PC;
-            pipeState.ifStatus  = pipelineInfo.ifInst.status;
-            pipeState.idInstr   = pipelineInfo.idInst.instruction;
-            pipeState.idStatus  = pipelineInfo.idInst.status;
-            pipeState.exInstr   = pipelineInfo.exInst.instruction;
-            pipeState.exStatus  = pipelineInfo.exInst.status;
-            pipeState.memInstr  = pipelineInfo.memInst.instruction;
-            pipeState.memStatus = pipelineInfo.memInst.status;
-            pipeState.wbInstr   = pipelineInfo.wbInst.instruction;
-            pipeState.wbStatus  = pipelineInfo.wbInst.status;
-            dumpPipeState(pipeState, output);
-
-            if (status == HALT) break;
-            continue;
         } else {
             bool needData = exPrev.readsMem || exPrev.writesMem;
 
@@ -218,50 +194,55 @@ Status runCycles(uint64_t cycles) {
 
         bool idPrevIsStore  = idPrev.writesMem && !idPrev.readsMem;
 
-        if (stallCyclesCount > 0) {
-            // extra stall cycle for load-branch
-            StallID  = true;
-            BubbleEx = true;
-            stallCyclesCount--;
-        } else {
-            // load-use stall (1 cycle), but do not stall store-data (rs2) because of WB->MEM forwarding
-            bool hazardRs1 = (idPrev.rs1 == exPrev.rd);
-            bool hazardRs2 = (idPrev.rs2 == exPrev.rd);
-
-            bool loadUse = exPrev.readsMem && exPrev.writesRd &&
-                           exPrev.rd != 0 &&
-                           !idPrevIsBranch &&
-                           (hazardRs1 ||
-                            (hazardRs2 && !idPrevIsStore));
-
-            if (loadUse) {
+        if (!dStall) {
+            if (stallCyclesCount > 0) {
+                // extra stall cycle for load-branch
                 StallID  = true;
                 BubbleEx = true;
-                loadStallCount++;
-            }
+                stallCyclesCount--;
+            } else {
+                // load-use stall (1 cycle), but do not stall store-data (rs2) because of WB->MEM forwarding
+                bool hazardRs1 = (idPrev.rs1 == exPrev.rd);
+                bool hazardRs2 = (idPrev.rs2 == exPrev.rd);
 
-            // arithmetic-branch stall (1 cycle)
-            if (exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0 &&
-                idPrevIsBranch && !StallID &&
-                (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd)) {
-                StallID  = true;
-                BubbleEx = true;
-            }
+                bool loadUse = exPrev.readsMem && exPrev.writesRd &&
+                               exPrev.rd != 0 &&
+                               !idPrevIsBranch &&
+                               (hazardRs1 ||
+                                (hazardRs2 && !idPrevIsStore));
 
-            // load-branch stall (2 cycles total)
-            if (exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0 &&
-                idPrevIsBranch &&
-                (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) &&
-                !StallID) {
-                StallID        = true;
-                BubbleEx       = true;
-                stallCyclesCount = 1;   // one more stall next cycle
-                loadStallCount++;
+                if (loadUse) {
+                    StallID  = true;
+                    BubbleEx = true;
+                    loadStallCount++;
+                }
+
+                // arithmetic-branch stall (1 cycle)
+                if (exPrev.doesArithLogic && exPrev.writesRd && exPrev.rd != 0 &&
+                    idPrevIsBranch && !StallID &&
+                    (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd)) {
+                    StallID  = true;
+                    BubbleEx = true;
+                }
+
+                // load-branch stall (2 cycles total)
+                if (exPrev.readsMem && exPrev.writesRd && exPrev.rd != 0 &&
+                    idPrevIsBranch &&
+                    (idPrev.rs1 == exPrev.rd || idPrev.rs2 == exPrev.rd) &&
+                    !StallID) {
+                    StallID        = true;
+                    BubbleEx       = true;
+                    stallCyclesCount = 1;   // one more stall next cycle
+                    loadStallCount++;
+                }
             }
         }
 
         // EX
-        if (BubbleEx) {
+        if (dStall) {
+            // D-cache stall: hold EX
+            pipelineInfo.exInst = exPrev;
+        } else if (BubbleEx) {
             // insert bubble in EX
             pipelineInfo.exInst = nop(BUBBLE);
         } else {
@@ -275,7 +256,7 @@ Status runCycles(uint64_t cycles) {
         // ID and branches (predict always not taken)
         bool branchTaken = false;
 
-        if (idPrevIsBranch) {
+        if (!dStall && idPrevIsBranch) {
             // forwarding for branch in ID
             forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
             forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
@@ -291,7 +272,7 @@ Status runCycles(uint64_t cycles) {
 
         // ID update (from IF)
         Simulator::Instruction newIdInst;  // what will be in ID
-        if (StallID || iStall) {
+        if (dStall || StallID || iStall) {
             // some stall, hold ID
             newIdInst = idPrev;
         } else {
@@ -300,12 +281,12 @@ Status runCycles(uint64_t cycles) {
         }
 
         // if branch is taken, squash the speculative IF instruction before it enters ID
-        if (!StallID && idPrevIsBranch && branchTaken) {
+        if (!dStall && !StallID && idPrevIsBranch && branchTaken) {
             newIdInst = nop(SQUASHED);
         }
 
         // PC and IF control
-        if (!StallID && !iStall) {
+        if (!dStall && !StallID && !iStall) {
             if (idPrevIsBranch) {
                 if (branchTaken) {
                     // always-not-taken mispredict
@@ -326,18 +307,20 @@ Status runCycles(uint64_t cycles) {
         pipelineInfo.idInst = newIdInst;
 
         // WB->MEM forwarding for load->store (store data)
-        if (exPrev.writesMem && !exPrev.readsMem && exPrev.readsRs2 && exPrev.rs2 != 0) {
-            const Simulator::Instruction &wbNow = pipelineInfo.wbInst;
-            if (wbNow.writesRd && wbNow.rd == exPrev.rs2 && wbNow.readsMem) {
-                // forward from WB load to store data
-                Simulator::Instruction &exRef = pipelineInfo.exInst;
-                exRef.op2Val = wbNow.memResult;
+        if (!dStall) {
+            if (exPrev.writesMem && !exPrev.readsMem && exPrev.readsRs2 && exPrev.rs2 != 0) {
+                const Simulator::Instruction &wbNow = pipelineInfo.wbInst;
+                if (wbNow.writesRd && wbNow.rd == exPrev.rs2 && wbNow.readsMem) {
+                    // forward from WB load to store data
+                    Simulator::Instruction &exRef = pipelineInfo.exInst;
+                    exRef.op2Val = wbNow.memResult;
+                }
             }
         }
 
         // IF
-        if (StallID) {
-            // hold IF while ID is stalled
+        if (dStall || StallID) {
+            // hold IF while MEM or ID is stalled
             pipelineInfo.ifInst = ifPrev;
         } else if (!squashIF) {
             if (iStall) {
