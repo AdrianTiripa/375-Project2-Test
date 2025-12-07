@@ -31,6 +31,7 @@ class Cache {
 private:
     uint64_t hits, misses;    
     CacheDataType type;
+    uint64_t time;
 
 public:
     CacheConfig config;
@@ -56,7 +57,7 @@ public:
 
     vector<vector<uint64_t>> cacheArray; // model for cache
     vector<vector<bool>> validBits; // valid bits for each cache block
-    vector<uint64_t> LRUCounter; // keeps track of LRU for each set
+    vector<vector<uint64_t>> LRUCounter; // keeps track of LRU for each set
 
     uint64_t numSets;
     uint64_t numBlocks;

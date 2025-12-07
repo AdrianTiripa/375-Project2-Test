@@ -20,6 +20,7 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     hits=0;
     misses=0;
     type = cacheType;
+    time=0;
 
     // Initialize cache structures
     numBlocks = config.cacheSize/config.blockSize;
@@ -35,7 +36,7 @@ Cache::Cache(CacheConfig configParam, CacheDataType cacheType) : config(configPa
     validBits.assign(numSets,vector<bool>(config.ways, false));
 
     // initialize LRU counters to 0, there is one counter per set
-    LRUCounter.assign(numSets, 0);
+    LRUCounter.assign(numSets, vector<uint64_t>(config.ways, 0));
 
 }
 
@@ -59,31 +60,41 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
             hit = true;
             hits++;
             // update LRU counter
-            LRUCounter[index]++;
-            if(LRUCounter[index] > (config.ways-1)) {
-                LRUCounter[index] = 0; // reset if exceeds ways
-            }
-            break;
+            LRUCounter[index][i] = ++time;
+            return hit;
         }
     }
 
     // on miss, increase miss count and replace LRU block
     if(!hit){
         misses++;
-        cacheArray[index][LRUCounter[index]] = tag;
-        validBits[index][LRUCounter[index]] = true;
 
-        // update which block is LRU in the set
-        LRUCounter[index]++;
-        if(LRUCounter[index] > (config.ways-1)){
-            LRUCounter[index] = 0; // reset if exceeds ways
+        // look for an invalid block first
+        for(int i=0; i<config.ways; i++){
+            if(!validBits[index][i]){
+                cacheArray[index][i] = tag;
+                validBits[index][i] = true;
+                LRUCounter[index][i] = ++time;
+                return hit;
+            }
         }
 
+        // if all blocks are valid, replace LRU block
+        uint64_t leastTime=0;
+        uint64_t LRUBlock=0;
+
+        // find LRU block
+        for(int i=0; i<config.ways; i++){
+            if(LRUCounter[index][i]<leastTime){
+                leastTime = LRUCounter[index][i];
+                LRUBlock = i;
+            }
+        }
+        cacheArray[index][LRUBlock] = tag;
+        validBits[index][LRUBlock] = true;
+        LRUCounter[index][LRUBlock] = ++time;
+        return hit;
     }
-
-    // return result of cache access
-    return hit;
-
 
     // For simplicity, we're using a random boolean to simulate cache hit/miss
     /*bool hit = distribution(generator) < 0.20;  // random 20% hit for a strange cache
