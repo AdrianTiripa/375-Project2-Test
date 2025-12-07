@@ -394,10 +394,11 @@ Status runTillHalt() {
     Status status;
     while (true) {
         status = static_cast<Status>(runCycles(1));
-        if (status == HALT) break;
+        if (status == HALT || status == ERROR) break;
     }
     return status;
 }
+
 
 // dump the state of the simulator
 Status finalizeSimulator() {
