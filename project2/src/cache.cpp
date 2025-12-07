@@ -80,7 +80,7 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
         }
 
         // if all blocks are valid, replace LRU block
-        uint64_t leastTime=0;
+        uint64_t leastTime=LRUCounter[index][0];
         uint64_t LRUBlock=0;
 
         // find LRU block
