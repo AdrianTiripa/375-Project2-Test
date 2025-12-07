@@ -418,7 +418,7 @@ Status runTillHalt() {
     Status status;
     while (true) {
         status = static_cast<Status>(runCycles(1));
-        if (status == HALT || status == ERROR) break;
+        if (status == HALT) break;
     }
     return status;
 }
