@@ -357,7 +357,7 @@ Status runCycles(uint64_t cycles) {
             status = ERROR;
         }
 
-dump_state:
+        dump_state:
         // WB check for halt
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
