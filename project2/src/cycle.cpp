@@ -199,7 +199,7 @@ Status runCycles(uint64_t cycles) {
         }
 
         if (skipRest) {
-            goto dump_state;
+            goto DUMP_STATE;
         }
 
         // Hazard detection
@@ -357,7 +357,7 @@ Status runCycles(uint64_t cycles) {
             status = ERROR;
         }
 
-        dump_state:
+        DUMP_STATE:
         // WB check for halt
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
