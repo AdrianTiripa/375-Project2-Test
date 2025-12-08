@@ -62,16 +62,17 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     iCacheStallCycles = 0;
     dCacheStallCycles = 0;
 
-    // start with an empty pipeline (all IDLE NOPs)
     pipelineInfo.ifInst = nop(IDLE);
     pipelineInfo.idInst = nop(IDLE);
     pipelineInfo.exInst = nop(IDLE);
     pipelineInfo.memInst = nop(IDLE);
     pipelineInfo.wbInst = nop(IDLE);
 
-    // NOTE: we no longer do an "initial fetch" here.
-    // The first call to runCycles(..) will perform the first simIF(PC)
-    // so that cycle 0 shows an idle pipeline, matching the reference output.
+    // initial fetch
+    // NOTE: we restore this so that the first call to runCycles(..)
+    // sees a real instruction in IF, matching your original control flow
+    // and ensuring we eventually reach HALT.
+    pipelineInfo.ifInst = simulator->simIF(PC); // COME BACK
 
     return SUCCESS;
 }
@@ -87,7 +88,6 @@ Status runCycles(uint64_t cycles) {
     PipeState pipeState = {
         0,
     };
-
 
     while (cycles == 0 || count < cycles) {
 
@@ -316,10 +316,6 @@ Status runCycles(uint64_t cycles) {
                 }
             }
         }
-
-
-        // (No ERROR status on IF here; if PC is bad and they want a memory exception
-        // they will encode that via the program / tests; otherwise we just keep running.)
 
         // WB Check for halt instruction
         if (pipelineInfo.wbInst.isHalt) {
