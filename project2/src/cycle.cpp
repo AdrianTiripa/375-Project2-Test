@@ -120,7 +120,7 @@ Status runCycles(uint64_t cycles) {
         // Only check the D-cache if there is NO outstanding miss right now
         bool dCacheStall = false;
         if (!memError && memAccess && dCacheStallCycles == 0) {
-            CacheAccessType type = memPrev.readsMem ? CACHE_READ : CACHE_WRITE;
+            CacheOperation type = memPrev.readsMem ? CACHE_READ : CACHE_WRITE;
             dCacheStall = !dCache->access(memPrev.memAddress, type);
         }
 
