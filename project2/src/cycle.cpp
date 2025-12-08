@@ -361,7 +361,6 @@ dump_state:
         // WB check for halt
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
-            goto dump_state;
         }
 
         // dump pipeline
