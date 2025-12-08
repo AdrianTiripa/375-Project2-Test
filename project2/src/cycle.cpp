@@ -286,10 +286,11 @@ Status runCycles(uint64_t cycles) {
                     PC then we are to abort the stall cycles for the 
                     */
                     // Cancel any previous I-cache stall; we are changing PC.
-                    if (iCacheStallCycles != 0) {
-                        iCache->invalidate(PC);
-                        iCacheStallCycles = 0; 
-                    }
+                    //if (iCacheStallCycles != 0) {
+                    //    iCache->invalidate(PC);
+                    //    iCacheStallCycles = 0; 
+                    //}
+                    iCacheStallCycles = 0;
                     PC = idPrev.nextPC;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // I think::: We don't call iCache->access here; the miss/hit for PC will be handled
