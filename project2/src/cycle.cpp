@@ -112,16 +112,16 @@ Status runCycles(uint64_t cycles) {
 
         // first check for a memory exception on the address that will access D-Cache
        // Memory access happens in MEM stage: use memPrev
-        bool memAccess = (memPrev.readsMem || memPrev.writesMem);
+        bool exMemAccess = (exPrev.readsMem || exPrev.writesMem);
 
         // Memory exception: address out of range
-        bool memError = memAccess && (memPrev.memAddress >= MEMORY_SIZE);
+        bool memError = exMemAccess && (exPrev.memAddress >= MEMORY_SIZE);
 
         // Only check the D-cache if there is NO outstanding miss right now
         bool dCacheStall = false;
-        if (!memError && memAccess && dCacheStallCycles == 0) {
-            CacheOperation type = memPrev.readsMem ? CACHE_READ : CACHE_WRITE;
-            dCacheStall = !dCache->access(memPrev.memAddress, type);
+        if (!memError && exMemAccess && dCacheStallCycles == 0) {
+            CacheOperation type = exPrev.readsMem ? CACHE_READ : CACHE_WRITE;
+            dCacheStall = !dCache->access(exPrev.memAddress, type);
         }
 
         // Case: currently serving a previous D-cache miss
@@ -144,6 +144,8 @@ Status runCycles(uint64_t cycles) {
             if (iCacheStallCycles > 0) {
                 iCacheStallCycles--;
             }
+
+            goto END_OF_CYCLE;
         }
         
         // Case: memory out of bounds (memory exception)
@@ -153,7 +155,9 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.exInst = nop(SQUASHED);
             pipelineInfo.idInst = nop(SQUASHED);
             PC = 0x8000;
+            iCacheStallCycles = 0;
             pipelineInfo.ifInst = simulator->simIF(PC);
+            goto END_OF_CYCLE;
         }
 
         // Case: dCache miss on current cycle
@@ -162,12 +166,7 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.wbInst = simulator->simWB(memPrev);
 
             // The missing load/store stays in MEM
-            pipelineInfo.memInst = memPrev;
-
-            // Younger instructions can move forward this cycle; stall starts next cycle
-            pipelineInfo.exInst = exPrev;
-            pipelineInfo.idInst = idPrev;
-            pipelineInfo.ifInst = ifPrev;
+            pipelineInfo.memInst = simulator->simMEM(exPrev);
 
             // Start the miss penalty counter: additional stall cycles
             dCacheStallCycles = dCache->config.missLatency;
@@ -286,11 +285,10 @@ Status runCycles(uint64_t cycles) {
                     PC then we are to abort the stall cycles for the 
                     */
                     // Cancel any previous I-cache stall; we are changing PC.
-                    //if (iCacheStallCycles != 0) {
-                    //    iCache->invalidate(PC);
-                    //    iCacheStallCycles = 0; 
-                    //}
-                    iCacheStallCycles = 0;
+                    if (iCacheStallCycles != 0) {
+                        iCache->invalidate(PC);
+                        iCacheStallCycles = 0; 
+                    }
                     PC = idPrev.nextPC;
                     pipelineInfo.ifInst = simulator->simIF(PC);
                     // I think::: We don't call iCache->access here; the miss/hit for PC will be handled
@@ -342,7 +340,7 @@ Status runCycles(uint64_t cycles) {
 
         // (No ERROR status on IF here; if PC is bad and they want a memory exception
         // they will encode that via the program / tests; otherwise we just keep running.)
-
+        END_OF_CYCLE:
         // WB Check for halt instruction
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
