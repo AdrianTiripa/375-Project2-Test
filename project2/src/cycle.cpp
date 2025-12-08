@@ -100,22 +100,24 @@ Status runCycles(uint64_t cycles) {
         bool stallID   = false;
         bool bubbleEX  = false;
 
-        // ========== EXCEPTIONS FIRST ==========
+        // ========= EXCEPTIONS (simple) =========
 
-        // Memory exception detected in MEM: squash this instruction and all after it, jump to 0x8000.
-        if (!oldMEM.isNop && oldMEM.memException) {
+        bool hasMemException = (!oldMEM.isNop && oldMEM.memException);
+        bool hasIllegalInID  = (!oldID.isNop && !oldID.isLegal);
+
+        if (hasMemException) {
             // older instructions still complete
             nextWB  = simulator->simWB(oldWB);
+            // squash excepting and younger instructions
             nextMEM = nop(SQUASHED);
             nextEX  = nop(SQUASHED);
             nextID  = nop(SQUASHED);
             nextIF  = nop(SQUASHED);
 
             PC                    = 0x8000;
-            loadBranchExtraCycles = 0;  // clear any pending load-branch stall
+            loadBranchExtraCycles = 0;
         }
-        // Illegal instruction in ID: squash it and younger, jump to 0x8000.
-        else if (!oldID.isNop && !oldID.isLegal) {
+        else if (hasIllegalInID) {
             nextWB  = simulator->simWB(oldMEM);
             nextMEM = simulator->simMEM(oldEX);
             nextEX  = nop(SQUASHED);
@@ -126,7 +128,7 @@ Status runCycles(uint64_t cycles) {
             loadBranchExtraCycles = 0;
         }
         else {
-            // ========== HAZARD DETECTION (LOAD/BRANCH) ==========
+            // ========= HAZARD DETECTION =========
 
             bool exWritesRd = oldEX.writesRd && (oldEX.rd != 0);
             bool exIsLoad   = oldEX.readsMem && !oldEX.writesMem && exWritesRd;
@@ -149,7 +151,7 @@ Status runCycles(uint64_t cycles) {
 
             bool loadUseHazard =
                 exIsLoad && !idIsBranch &&
-                (hazardRs1 || (hazardRs2 && !idIsStore));  // allow load -> store with forwarding
+                (hazardRs1 || (hazardRs2 && !idIsStore));  // allow load->store without stall
 
             bool arithBranchHazard =
                 exIsArith && idIsBranch && (hazardRs1 || hazardRs2);
@@ -175,14 +177,14 @@ Status runCycles(uint64_t cycles) {
                     bubbleEX  = true;
                     loadStallCount++;
                 } else if (arithBranchHazard) {
-                    // one stall cycle (no load stall counter increment)
+                    // one stall cycle (no load stall count)
                     stallIF   = true;
                     stallID   = true;
                     bubbleEX  = true;
                 }
             }
 
-            // ========== STAGE UPDATES BACK-TO-FRONT ==========
+            // ========= STAGE UPDATES BACK-TO-FRONT =========
 
             // WB: commit result of old MEM
             nextWB = simulator->simWB(oldMEM);
@@ -205,33 +207,31 @@ Status runCycles(uint64_t cycles) {
             nextMEM = simulator->simMEM(exForMem);
 
             // EX: either bubble or real execute with EX/MEM forwarding
+            auto forwardEXOperand = [&](uint64_t rs, bool reads, uint64_t &val) {
+                if (!reads || rs == 0) return;
+
+                // EX stage forwarding (ALU result)
+                if (oldEX.writesRd && oldEX.doesArithLogic && oldEX.rd == rs) {
+                    val = oldEX.arithResult;
+                    return;
+                }
+
+                // MEM stage forwarding (ALU or load result)
+                if (oldMEM.writesRd && oldMEM.rd == rs) {
+                    if (oldMEM.readsMem) {
+                        val = oldMEM.memResult;
+                    } else if (oldMEM.doesArithLogic) {
+                        val = oldMEM.arithResult;
+                    }
+                }
+            };
+
             if (bubbleEX) {
                 nextEX = nop(BUBBLE);
             } else {
                 Simulator::Instruction idForEX = oldID;
-
-                auto forwardOperand = [&](uint64_t rs, bool reads, uint64_t& val) {
-                    if (!reads || rs == 0) return;
-
-                    // EX stage forwarding (ALU result)
-                    if (oldEX.writesRd && oldEX.doesArithLogic && oldEX.rd == rs) {
-                        val = oldEX.arithResult;
-                        return;
-                    }
-
-                    // MEM stage forwarding (ALU or load result)
-                    if (oldMEM.writesRd && oldMEM.rd == rs) {
-                        if (oldMEM.readsMem) {
-                            val = oldMEM.memResult;
-                        } else if (oldMEM.doesArithLogic) {
-                            val = oldMEM.arithResult;
-                        }
-                    }
-                };
-
-                forwardOperand(idForEX.rs1, idForEX.readsRs1, idForEX.op1Val);
-                forwardOperand(idForEX.rs2, idForEX.readsRs2, idForEX.op2Val);
-
+                forwardEXOperand(idForEX.rs1, idForEX.readsRs1, idForEX.op1Val);
+                forwardEXOperand(idForEX.rs2, idForEX.readsRs2, idForEX.op2Val);
                 nextEX = simulator->simEX(idForEX);
             }
 
@@ -242,22 +242,50 @@ Status runCycles(uint64_t cycles) {
                 nextID = simulator->simID(oldIF);
             }
 
-            // ========== BRANCH PREDICTION (ALWAYS NOT TAKEN) ==========
+            // ========= BRANCH RESOLUTION IN ID (WITH FORWARDING) =========
 
-            uint64_t newPC = PC + 4;  // default next fetch
+            uint64_t newPC      = PC + 4;  // default next fetch
+            bool branchTaken    = false;
+            bool idIsCtrl       = (oldID.opcode == OP_BRANCH ||
+                                   oldID.opcode == OP_JAL    ||
+                                   oldID.opcode == OP_JALR);
 
-            bool nextIsCtrl =
-                (nextID.opcode == OP_BRANCH ||
-                 nextID.opcode == OP_JAL    ||
-                 nextID.opcode == OP_JALR);
+            if (!oldID.isNop && oldID.isLegal && idIsCtrl && !stallID) {
+                // Work on a copy so we don't disturb oldID
+                Simulator::Instruction branchInst = oldID;
 
-            bool branchTaken = false;
-            if (!nextID.isNop && nextID.isLegal && nextIsCtrl) {
-                // simID should have filled nextPC for control instructions
-                if (nextID.nextPC != nextID.PC + 4) {
+                // Forward to ID operands (for branches)
+                auto forwardIDOperand = [&](uint64_t rs, bool reads, uint64_t &val) {
+                    if (!reads || rs == 0) return;
+
+                    // EX result
+                    if (oldEX.writesRd && oldEX.doesArithLogic && oldEX.rd == rs) {
+                        val = oldEX.arithResult;
+                        return;
+                    }
+                    // MEM result (ALU or load)
+                    if (oldMEM.writesRd && oldMEM.rd == rs) {
+                        if (oldMEM.readsMem)       val = oldMEM.memResult;
+                        else if (oldMEM.doesArithLogic) val = oldMEM.arithResult;
+                    }
+                };
+
+                forwardIDOperand(branchInst.rs1, branchInst.readsRs1, branchInst.op1Val);
+                forwardIDOperand(branchInst.rs2, branchInst.readsRs2, branchInst.op2Val);
+
+                // Compute nextPC using functional branch logic
+                branchInst = simulator->simNextPCResolution(branchInst);
+
+                uint64_t fallThrough = branchInst.PC + 4;
+                if (branchInst.nextPC != fallThrough) {
                     branchTaken = true;
-                    newPC       = nextID.nextPC;
+                    newPC       = branchInst.nextPC;
+                } else {
+                    newPC       = fallThrough;
                 }
+
+                // If this is the instruction currently in ID, keep the resolved form there
+                nextID = branchInst;
             }
 
             // IF: fetch if not stalled
@@ -268,7 +296,8 @@ Status runCycles(uint64_t cycles) {
                 iCache->access(PC, CACHE_READ);
                 nextIF = simulator->simIF(PC);
 
-                if (nextIsCtrl) {
+                // mark speculative if ID has a control op
+                if (idIsCtrl) {
                     nextIF.status = SPECULATIVE;
                 } else {
                     nextIF.status = NORMAL;
@@ -326,7 +355,7 @@ Status runTillHalt() {
     Status status;
     while (true) {
         status = runCycles(1);
-        if (status == HALT || status == ERROR) break;
+        if (status == HALT) break;
     }
     return status;
 }
