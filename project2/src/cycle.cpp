@@ -68,11 +68,14 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     pipelineInfo.memInst = nop(IDLE);
     pipelineInfo.wbInst = nop(IDLE);
 
-    // initial fetch
-    // NOTE: we restore this so that the first call to runCycles(..)
-    // sees a real instruction in IF, matching your original control flow
-    // and ensuring we eventually reach HALT.
-    pipelineInfo.ifInst = simulator->simIF(PC); // COME BACK
+    // initial fetch *through* I-Cache
+    // This models the I-Cache access (and miss penalty) for the instruction at PC = 0.
+    bool iHit = iCache->access(PC, CACHE_READ);
+    pipelineInfo.ifInst = simulator->simIF(PC);
+    if (!iHit) {
+        // miss: start counting stall cycles for this instruction
+        iCacheStallCycles = iCache->config.missLatency;
+    }
 
     return SUCCESS;
 }
