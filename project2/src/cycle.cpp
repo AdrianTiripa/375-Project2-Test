@@ -112,16 +112,16 @@ Status runCycles(uint64_t cycles) {
 
         // first check for a memory exception on the address that will access D-Cache
        // Memory access happens in MEM stage: use memPrev
-        bool exMemAccess = (exPrev.readsMem || exPrev.writesMem);
+        bool memAccess = (memPrev.readsMem || memPrev.writesMem);
 
         // Memory exception: address out of range
-        bool memError = exMemAccess && (exPrev.memAddress >= MEMORY_SIZE);
+        bool memError = memAccess && (memPrev.memAddress >= MEMORY_SIZE);
 
         // Only check the D-cache if there is NO outstanding miss right now
         bool dCacheStall = false;
-        if (!memError && exMemAccess && dCacheStallCycles == 0) {
-            CacheOperation type = exPrev.readsMem ? CACHE_READ : CACHE_WRITE;
-            dCacheStall = !dCache->access(exPrev.memAddress, type);
+        if (!memError && memAccess && dCacheStallCycles == 0) {
+            CacheOperation type = memPrev.readsMem ? CACHE_READ : CACHE_WRITE;
+            dCacheStall = !dCache->access(memPrev.memAddress, type);
         }
 
         // Case: currently serving a previous D-cache miss
