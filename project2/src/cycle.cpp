@@ -124,7 +124,7 @@ Status runCycles(uint64_t cycles) {
             dCacheStall = !dCache->access(memPrev.memAddress, type);
         }
 
-        // Case : currently serving a previous D-cache miss
+        // Case: currently serving a previous D-cache miss
         if (dCacheStallCycles > 0) {
             // Keep the MEM-stage instruction (the load/store that missed)
             pipelineInfo.memInst = memPrev;
@@ -139,6 +139,11 @@ Status runCycles(uint64_t cycles) {
 
             // Pay one cycle of the stall
             dCacheStallCycles--;
+
+            // Let any outstanding I-cache miss proceed in parallel
+            if (iCacheStallCycles > 0) {
+                iCacheStallCycles--;
+            }
         }
         
         // Case: memory out of bounds (memory exception)
@@ -207,8 +212,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (/*pipelineInfo.memInst.writesRd &&*/ (pipelineInfo.memInst.rd == idPrev.rs2)) 
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
-                if (iCacheStallCycles != 0)
-                    iCacheStallCycles -= 1;
+                //if (iCacheStallCycles != 0)
+                //    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // count this load stall
@@ -224,8 +229,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (/*exPrev.writesRd &&*/ (exPrev.rd == idPrev.rs2)) 
                                                 ? exPrev.arithResult:
                                                 pipelineInfo.idInst.op2Val;
-                if (iCacheStallCycles != 0)
-                    iCacheStallCycles -= 1;
+                //if (iCacheStallCycles != 0)
+                //    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // Update PC Resolution
@@ -241,8 +246,8 @@ Status runCycles(uint64_t cycles) {
                 pipelineInfo.idInst.op2Val = (pipelineInfo.memInst.writesRd && (pipelineInfo.memInst.rd == idPrev.rs2)) 
                                                 ? pipelineInfo.memInst.memResult:
                                                 pipelineInfo.idInst.op2Val;
-                if (iCacheStallCycles != 0)
-                    iCacheStallCycles -= 1;
+                //if (iCacheStallCycles != 0)
+                //    iCacheStallCycles -= 1;
                 // insert bubble
                 pipelineInfo.exInst = nop(BUBBLE);
                 // update PC resolution if needed
@@ -280,15 +285,18 @@ Status runCycles(uint64_t cycles) {
                     I am assuming here that if there is a branch which will change the
                     PC then we are to abort the stall cycles for the 
                     */
+                    // Cancel any previous I-cache stall; we are changing PC.
                     if (iCacheStallCycles != 0) {
                         iCache->invalidate(PC);
                         iCacheStallCycles = 0; 
                     }
                     PC = idPrev.nextPC;
                     pipelineInfo.ifInst = simulator->simIF(PC);
+                    // I think::: We don't call iCache->access here; the miss/hit for PC will be handled
+                    // by the branch-not-taken / no-branch logic in the next cycle.
                     // Case: New PC misses in iCache
-                    if (!iCache->access(PC, CACHE_READ)) 
-                        iCacheStallCycles = iCache->config.missLatency;
+                    // if (!iCache->access(PC, CACHE_READ)) 
+                    //    iCacheStallCycles = iCache->config.missLatency;
                     
                 }
 
@@ -306,11 +314,13 @@ Status runCycles(uint64_t cycles) {
                     // Case: Still Stalling from previous iCache miss
                     if (iCacheStallCycles > 0) {
                         pipelineInfo.idInst = nop(BUBBLE);
+                        pipelineInfo.ifInst = ifPrev;
                         iCacheStallCycles--;
                     }
                     // Case: iCache miss
                     else if (!iCache->access(PC, CACHE_READ)) {
                         pipelineInfo.ifInst.status= NORMAL;
+                        pipelineInfo.ifInst.PC = PC;
                         iCacheStallCycles = iCache->config.missLatency-1;
                         pipelineInfo.idInst = simulator->simID(ifPrev);
                     } else {
