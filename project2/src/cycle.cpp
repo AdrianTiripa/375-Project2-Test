@@ -67,22 +67,6 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     simulator->setMemory(mem);
     iCache = new Cache(iCacheConfig, I_CACHE);
     dCache = new Cache(dCacheConfig, D_CACHE);
-    // reset global state
-    cycleCount = 0;
-    PC = 0;
-    loadStallCount = 0;
-    iCacheStallCycles = 0;
-    dCacheStallCycles = 0;
-
-    pipelineInfo.ifInst = nop(IDLE);
-    pipelineInfo.idInst = nop(IDLE);
-    pipelineInfo.exInst = nop(IDLE);
-    pipelineInfo.memInst = nop(IDLE);
-    pipelineInfo.wbInst = nop(IDLE);
-
-    // initial fetch
-    pipelineInfo.ifInst = simulator->simIF(PC); // COME BACK
-    
     return SUCCESS;
 }
 
