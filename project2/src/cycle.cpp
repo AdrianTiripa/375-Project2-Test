@@ -49,23 +49,26 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     return SUCCESS;
 }
 
+// forwarding helper 
 static void forwarding(uint64_t rs, bool readsRs, uint64_t &opVal,
                        const Simulator::Instruction &exPrev,
                        const Simulator::Instruction &memPrev) {
     if (!readsRs || rs == 0) return;
 
-    // exPrev (closer)
-    if (exPrev.writesRd && (exPrev.rd == rs) && exPrev.doesArithLogic) {
+    // forward from EX
+    if (exPrev.writesRd && exPrev.rd == rs && exPrev.doesArithLogic) {
         opVal = exPrev.arithResult;
         return;
     }
 
-    // memPrev (older) – generic value to be written to rd
+    // forward from MEM (load or arith)
     if (memPrev.writesRd && memPrev.rd == rs) {
-        opVal = memPrev.valToWrite;
-        return;
+        if (memPrev.readsMem) {
+            opVal = memPrev.memResult;
+        } else if (memPrev.doesArithLogic) {
+            opVal = memPrev.arithResult;
+        }
     }
-    return;
 }
 
 // run the simulator for a certain number of cycles
