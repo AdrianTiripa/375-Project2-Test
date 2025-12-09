@@ -160,6 +160,7 @@ Status runCycles(uint64_t cycles) {
         bool memAccess = false;
 
         bool dCacheStall = false;
+        bool iCacheStall = false;
 
 
         // WB SEQUENCE
@@ -196,6 +197,12 @@ Status runCycles(uint64_t cycles) {
         }
 
         // ID SEQUENCE
+        if (iCacheStallCycles > 0){
+            pipelineInfo.idInst = nop(BUBBLE);
+            pipelineInfo.idInst = ifPrev;
+            goto DUMP_STATE;
+        }
+        
         idPrev.op1Val = forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
         idPrev.op2Val = forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
 
@@ -235,6 +242,11 @@ Status runCycles(uint64_t cycles) {
         }
         else{
             pipelineInfo.ifInst = simulator->simIF(PC);
+            iCacheStall = !iCache->access(PC, CACHE_READ);
+            if (iCacheStall) {
+               iCacheStallCycles = iCache->config.missLatency;
+               goto DUMP_STATE; 
+            }
         }
 
         // UPDATE STATUS FOR IF
