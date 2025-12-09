@@ -250,9 +250,7 @@ Status runCycles(uint64_t cycles) {
                 if (iCacheStall) {
                 iCacheStallCycles = iCache->config.missLatency;
                 std::cout << "iCacheStallCycle" << iCacheStallCycles << std::endl;
-
                 iCacheStall = false;
-                std::cout << "PC" << PC << std::endl;
                 goto DUMP_STATE; 
                 }
             }
@@ -275,7 +273,7 @@ Status runCycles(uint64_t cycles) {
     }
 
     DUMP_STATE:
-
+    std::cout << "PC" << PC << std::endl;
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
