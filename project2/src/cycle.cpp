@@ -199,7 +199,6 @@ Status runCycles(uint64_t cycles) {
         // ID SEQUENCE
         if (iCacheStallCycles > 0){
             pipelineInfo.idInst = nop(BUBBLE);
-            pipelineInfo.ifInst = ifPrev;
             goto DUMP_STATE;
         }
 
