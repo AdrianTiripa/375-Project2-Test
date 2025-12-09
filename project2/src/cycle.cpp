@@ -114,6 +114,7 @@ Status runCycles(uint64_t cycles) {
             // Freeze younger stages: EX, ID, IF stay the same
             pipelineInfo.exInst  = exPrev;
             pipelineInfo.idInst  = idPrev;
+            pipelineInfo.ifInst  = ifPrev;
 
             // Nothing new retires while the miss is outstanding
             pipelineInfo.wbInst = nop(BUBBLE);
@@ -156,7 +157,7 @@ Status runCycles(uint64_t cycles) {
         // D_CACHE MISS DETECTION
         // first check for a memory exception on the address that will access D-Cache
         // Memory access happens in MEM stage: use memPrev
-        bool memAccess = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem);
+        bool memAccess = false;
 
         bool dCacheStall = false;
 
@@ -182,7 +183,6 @@ Status runCycles(uint64_t cycles) {
         }
         if (dCacheStall){
             dCacheStallCycles = dCache->config.missLatency;
-            goto DUMP_STATE;
         }
 
         // EX SEQUENCE
