@@ -49,26 +49,24 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     return SUCCESS;
 }
 
-// forwarding helper 
-static void forwarding(uint64_t rs, bool readsRs, uint64_t &opVal,
-                       const Simulator::Instruction &exPrev,
-                       const Simulator::Instruction &memPrev) {
-    if (!readsRs || rs == 0) return;
+static uint64_t forwarding(uint64_t rs, bool readsRs, uint64_t opVal,
+                       const Simulator::Instruction exPrev,
+                       const Simulator::Instruction memPrev) {
+    if (!readsRs || rs == 0) return opVal;
 
-    // forward from EX
-    if (exPrev.writesRd && exPrev.rd == rs && exPrev.doesArithLogic) {
-        opVal = exPrev.arithResult;
-        return;
+    // exPrev (closer)
+    if (exPrev.writesRd && (exPrev.rd == rs) && exPrev.doesArithLogic) {
+        return exPrev.arithResult;
     }
 
-    // forward from MEM (load or arith)
+    // memPrev (older) – generic value to be written to rd
     if (memPrev.writesRd && memPrev.rd == rs) {
-        if (memPrev.readsMem) {
-            opVal = memPrev.memResult;
-        } else if (memPrev.doesArithLogic) {
-            opVal = memPrev.arithResult;
-        }
+        if (memPrev.readsMem)
+            return memPrev.memResult;
+        else if (memPrev.doesArithLogic)
+            return memPrev.arithResult;
     }
+    return opVal;
 }
 
 // run the simulator for a certain number of cycles
@@ -143,14 +141,16 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.exInst = nop(BUBBLE);
         }
         else{
-            forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
-            forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
+            idPrev.op1Val = forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
+            idPrev.op2Val = forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
             pipelineInfo.exInst = simulator->simEX(idPrev);
         }
 
         // ID SEQUENCE
-        forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
-        forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
+        idPrev.op1Val = forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
+        idPrev.op2Val = forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
+
+
         uint64_t nextPC = PC;
         if(bubbleEXstallID){
            pipelineInfo.idInst = idPrev;
@@ -161,13 +161,16 @@ Status runCycles(uint64_t cycles) {
                 idPrev = simulator->simNextPCResolution(idPrev);
                 taken = ((idPrev.PC+4) != (idPrev.nextPC));
             }
-            
             if(taken){
                 pipelineInfo.idInst = nop(SQUASHED);
-                nextPC = idPrev.nextPC;
+                PC = idPrev.nextPC;
+                nextPC = PC + 4;
             }
             else{
                 pipelineInfo.idInst = simulator->simID(ifPrev);
+                if(ifPrev.status == SPECULATIVE){
+                    pipelineInfo.idInst = NORMAL;
+                }
             }
 
         }
@@ -181,7 +184,8 @@ Status runCycles(uint64_t cycles) {
         }
 
         // UPDATE STATUS FOR IF
-        if(idIsBranch){
+        if((pipelineInfo.idInst.opcode == OP_BRANCH) || (pipelineInfo.idInst.opcode == OP_JALR) ||
+                          (pipelineInfo.idInst.opcode == OP_JAL)){
             pipelineInfo.ifInst.status = SPECULATIVE;
         }
 
