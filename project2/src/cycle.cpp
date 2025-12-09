@@ -203,6 +203,11 @@ Status runCycles(uint64_t cycles) {
             iCacheStallCycles--;
             pipelineInfo.ifInst = ifPrev;
             pipelineInfo.idInst = nop(BUBBLE);
+            // ???
+            if (pipelineInfo.wbInst.isHalt) {
+            status = HALT;
+            break;
+        }
             goto DUMP_STATE;
         }
 
