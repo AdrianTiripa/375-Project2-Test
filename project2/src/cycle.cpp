@@ -72,7 +72,7 @@ static uint64_t forwarding(uint64_t rs, bool readsRs, uint64_t opVal,
 }
 
 // keep track of the number of cycles stall is applied
-static uint64_t loadStallCount = 0;
+// static uint64_t loadStallCount = 0;
 static uint64_t iCacheStallCycles = 0;
 static uint64_t dCacheStallCycles = 0;
 
@@ -198,6 +198,7 @@ Status runCycles(uint64_t cycles) {
 
         // ID SEQUENCE
         if (iCacheStallCycles > 0){
+            iCacheStallCycles--;
             pipelineInfo.idInst = nop(BUBBLE);
             goto DUMP_STATE;
         }
