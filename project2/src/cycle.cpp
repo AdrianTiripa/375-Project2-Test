@@ -244,7 +244,7 @@ Status runCycles(uint64_t cycles) {
         }
         else{
             pipelineInfo.ifInst = simulator->simIF(PC);
-            if (iCacheStallCycles == 0 && idPrev.isLegal){
+            if (iCacheStallCycles == 0 && pipelineInfo.idInst.isLegal){
                 iCacheStall = !iCache->access(PC, CACHE_READ);
                 std::cout << "iCacheStall" << iCacheStall << std::endl;
                 if (iCacheStall) {
