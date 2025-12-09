@@ -46,17 +46,17 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
     // find tag, index, block offset sizes
     uint64_t blockOffsetBits = log2(config.blockSize);
     uint64_t indexBits = log2(numSets); // not sure of the signature
-    uint64_t tagBits = 64 - blockOffsetBits - indexBits;
+    // uint64_t tagBits = 64 - blockOffsetBits - indexBits;
 
     // extract tag, index, block offset from address
-    uint64_t blockOffset = address & ((1 << blockOffsetBits) - 1);
+    // uint64_t blockOffset = address & ((1 << blockOffsetBits) - 1);
     uint64_t index = (address >> blockOffsetBits) & ((1 << indexBits) - 1);
     uint64_t tag = address >> (blockOffsetBits + indexBits);
 
     // look for hit in the corresponding set
     bool hit = false;
     for(uint64_t i = 0; i < config.ways; i++) {
-        if(validBits[index][i] && cacheArray[index][i] == tag) {
+        if(validBits[index][i] && (cacheArray[index][i] == tag)) {
             hit = true;
             hits++;
             // update LRU counter
@@ -70,7 +70,7 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
         misses++;
 
         // look for an invalid block first
-        for(int i=0; i<config.ways; i++){
+        for(uint64_t i=0; i<config.ways; i++){
             if(!validBits[index][i]){
                 cacheArray[index][i] = tag;
                 validBits[index][i] = true;
@@ -84,7 +84,7 @@ bool Cache::access(uint64_t address, CacheOperation readWrite) {
         uint64_t LRUBlock=0;
 
         // find LRU block
-        for(int i=0; i<config.ways; i++){
+        for(uint64_t i=0; i<config.ways; i++){
             if(LRUCounter[index][i]<leastTime){
                 leastTime = LRUCounter[index][i];
                 LRUBlock = i;
@@ -108,14 +108,14 @@ void Cache::invalidate(uint64_t address){
     // find tag, index, block offset sizes
     uint64_t blockOffsetBits = log2(config.blockSize);
     uint64_t indexBits = log2(numSets); // not sure of the signature
-    uint64_t tagBits = 64 - blockOffsetBits - indexBits;
+    // uint64_t tagBits = 64 - blockOffsetBits - indexBits;
 
     // extract tag, index, block offset from address
-    uint64_t blockOffset = address & ((1 << blockOffsetBits) - 1);
+    // uint64_t blockOffset = address & ((1 << blockOffsetBits) - 1);
     uint64_t index = (address >> blockOffsetBits) & ((1 << indexBits) - 1);
     uint64_t tag = address >> (blockOffsetBits + indexBits);
 
-    for(int i=0; i<config.ways; i++){
+    for(uint64_t i=0; i<config.ways; i++){
         if(validBits[index][i] && cacheArray[index][i] == tag){
             validBits[index][i] = false; // invalidate the block
             break;
