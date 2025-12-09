@@ -14,6 +14,8 @@ static Cache* dCache = nullptr;
 static std::string output;
 static uint64_t cycleCount = 0;
 
+static const uint64_t EXCEPTION_HANDLER = 0x8000;
+
 static uint64_t PC = 0;
 
 /**TODO: Implement pipeline simulation for the RISCV machine in this file.
@@ -185,9 +187,26 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.ifInst.status = SPECULATIVE;
         }
 
+        bool isIllegalException =
+            !pipelineInfo.idInst.isNop &&
+            !pipelineInfo.idInst.isHalt &&
+            !pipelineInfo.idInst.isLegal &&
+            (pipelineInfo.idInst.PC < EXCEPTION_HANDLER);
+
+        if (isIllegalException) {
+            // Squash the illegal instruction in ID
+            pipelineInfo.idInst = nop(SQUASHED);
+
+            // Squash whatever was just fetched in IF (younger than the exception)
+            pipelineInfo.ifInst = nop(SQUASHED);
+
+            // Redirect to exception handler
+            nextPC = EXCEPTION_HANDLER;
+        }
+
         // MOVE ON
         PC = nextPC;
-        
+
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
             break;
