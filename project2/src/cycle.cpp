@@ -246,6 +246,7 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.ifInst = simulator->simIF(PC);
             if (iCacheStallCycles == 0){
                 iCacheStall = !iCache->access(PC, CACHE_READ);
+                std::cout << iCacheStall << std::endl;
                 if (iCacheStall) {
                 iCacheStallCycles = iCache->config.missLatency;
                 iCacheStall = false;
