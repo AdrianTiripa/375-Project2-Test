@@ -261,8 +261,11 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.ifInst.status = SPECULATIVE;
         }
 
-        // MOVE ON
-        PC = nextPC;
+        if(!iCacheStall){
+           // MOVE ON
+            PC = nextPC; 
+        }
+        
 
         if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
