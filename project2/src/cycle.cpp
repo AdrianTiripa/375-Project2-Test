@@ -200,8 +200,8 @@ Status runCycles(uint64_t cycles) {
         // ID SEQUENCE
         if (iCacheStallCycles > 0){
             iCacheStallCycles--;
-            pipelineInfo.idInst = nop(BUBBLE);
             pipelineInfo.ifInst = ifPrev;
+            pipelineInfo.idInst = nop(BUBBLE);
             goto DUMP_STATE;
         }
 
@@ -244,11 +244,13 @@ Status runCycles(uint64_t cycles) {
         }
         else{
             pipelineInfo.ifInst = simulator->simIF(PC);
-            iCacheStall = !iCache->access(PC, CACHE_READ);
-            if (iCacheStall) {
-               iCacheStallCycles = iCache->config.missLatency;
-               iCacheStall = false;
-               // goto DUMP_STATE; 
+            if (iCacheStallCycles == 0){
+                iCacheStall = !iCache->access(PC, CACHE_READ);
+                if (iCacheStall) {
+                iCacheStallCycles = iCache->config.missLatency;
+                iCacheStall = false;
+                goto DUMP_STATE; 
+                }
             }
         }
 
