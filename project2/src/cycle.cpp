@@ -246,10 +246,13 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.ifInst = simulator->simIF(PC);
             if (iCacheStallCycles == 0){
                 iCacheStall = !iCache->access(PC, CACHE_READ);
-                std::cout << iCacheStall << std::endl;
+                std::cout << "iCacheStall" << iCacheStall << std::endl;
                 if (iCacheStall) {
                 iCacheStallCycles = iCache->config.missLatency;
+                std::cout << "iCacheStallCycle" << iCacheStallCycles << std::endl;
+
                 iCacheStall = false;
+                std::cout << "PC" << PC << std::endl;
                 goto DUMP_STATE; 
                 }
             }
