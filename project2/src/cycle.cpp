@@ -8,13 +8,13 @@
 #include "cache.h"
 #include "simulator.h"
 
+#define EXCEPTION_HANDLER 0x8000
+
 static Simulator* simulator = nullptr;
 static Cache* iCache = nullptr;
 static Cache* dCache = nullptr;
 static std::string output;
 static uint64_t cycleCount = 0;
-
-static const uint64_t EXCEPTION_HANDLER = 0x8000;
 
 static uint64_t PC = 0;
 
@@ -97,12 +97,15 @@ Status runCycles(uint64_t cycles) {
         Simulator::Instruction wbPrev = pipelineInfo.wbInst;
 
 
-        // BRANCH CATHCER
+        // BRANCH CATCHER
         bool idIsBranch = (idPrev.opcode == OP_BRANCH) || (idPrev.opcode == OP_JALR) ||
                           (idPrev.opcode == OP_JAL);
 
         // BRANCH TAKEN OR NOT
         bool taken = false;
+
+        // THE NEXT PC TO BE CALCULATED
+        uint64_t nextPC = PC;
 
         // HAZARD DETECTION (LOAD-USE, ARITHMETIC-BRANCH, LOAD-BRANCH)
 
@@ -148,9 +151,14 @@ Status runCycles(uint64_t cycles) {
         idPrev.op1Val = forwarding(idPrev.rs1, idPrev.readsRs1, idPrev.op1Val, exPrev, memPrev);
         idPrev.op2Val = forwarding(idPrev.rs2, idPrev.readsRs2, idPrev.op2Val, exPrev, memPrev);
 
-
-        uint64_t nextPC = PC;
-        if(bubbleEXstallID){
+        nextPC = PC; //maybe redundant but safe
+        if(!idPrev.isLegal) {
+            PC = EXCEPTION_HANDLER;
+            pipelineInfo.exInst = nop(SQUASHED);
+            pipelineInfo.idInst = nop(SQUASHED);
+            nextPC = PC + 4;
+        }
+        else if(bubbleEXstallID){
            pipelineInfo.idInst = idPrev;
         }
         else{
@@ -182,26 +190,10 @@ Status runCycles(uint64_t cycles) {
         }
 
         // UPDATE STATUS FOR IF
-        if((pipelineInfo.idInst.opcode == OP_BRANCH) || (pipelineInfo.idInst.opcode == OP_JALR) ||
-                          (pipelineInfo.idInst.opcode == OP_JAL)){
+        if((pipelineInfo.idInst.opcode == OP_BRANCH) 
+        || (pipelineInfo.idInst.opcode == OP_JALR) 
+        || (pipelineInfo.idInst.opcode == OP_JAL)){
             pipelineInfo.ifInst.status = SPECULATIVE;
-        }
-
-        bool isIllegalException =
-            !pipelineInfo.idInst.isNop &&
-            !pipelineInfo.idInst.isHalt &&
-            !pipelineInfo.idInst.isLegal &&
-            (pipelineInfo.idInst.PC < EXCEPTION_HANDLER);
-
-        if (isIllegalException) {
-            // Squash the illegal instruction in ID
-            pipelineInfo.idInst = nop(SQUASHED);
-
-            // Squash whatever was just fetched in IF (younger than the exception)
-            pipelineInfo.ifInst = nop(SQUASHED);
-
-            // Redirect to exception handler
-            nextPC = EXCEPTION_HANDLER;
         }
 
         // MOVE ON
