@@ -49,6 +49,10 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     iCache = new Cache(iCacheConfig, I_CACHE);
     dCache = new Cache(dCacheConfig, D_CACHE);
     return SUCCESS;
+
+    loadStallCount = 0
+    iCacheStallCycles = 0;
+    dCacheStallCycles = 0;
 }
 
 static uint64_t forwarding(uint64_t rs, bool readsRs, uint64_t opVal,
@@ -108,7 +112,6 @@ Status runCycles(uint64_t cycles) {
             // Pay one cycle of the stall
             dCacheStallCycles--;
 
-            DCACHE_STALL:
             // Keep the MEM-stage instruction (the load/store that missed)
             pipelineInfo.memInst = memPrev;
 
@@ -183,7 +186,7 @@ Status runCycles(uint64_t cycles) {
         }
         if (dCacheStall){
             dCacheStallCycles = dCache->config.missLatency;
-            goto DCACHE_STALL;
+            goto DUMP_STATE;
         }
 
         // EX SEQUENCE
