@@ -250,10 +250,6 @@ Status runCycles(uint64_t cycles) {
                 if (iCacheStall) {
                     iCacheStallCycles = iCache->config.missLatency;
                     iCacheStall = false;
-                    goto DUMP_STATE; 
-                }
-                else{
-                    nextPC = PC+4;
                 }
             }
         }
