@@ -203,7 +203,7 @@ Status runCycles(uint64_t cycles) {
             iCacheStallCycles--;
             pipelineInfo.ifInst = ifPrev;
             pipelineInfo.idInst = nop(BUBBLE);
-            // ???
+            //add this to exit the iteration correctly
             if (pipelineInfo.wbInst.isHalt) {
             status = HALT;
             break;
@@ -279,9 +279,6 @@ Status runCycles(uint64_t cycles) {
     }
 
     DUMP_STATE:
-    std::cout << "PC" << PC << std::endl;
-    std::cout << "stats" << status << std::endl;
-
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
