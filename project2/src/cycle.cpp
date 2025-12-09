@@ -71,6 +71,11 @@ static uint64_t forwarding(uint64_t rs, bool readsRs, uint64_t opVal,
     return opVal;
 }
 
+// keep track of the number of cycles stall is applied
+static uint64_t loadStallCount = 0;
+static uint64_t iCacheStallCycles = 0;
+static uint64_t dCacheStallCycles = 0;
+
 // run the simulator for a certain number of cycles
 // return SUCCESS if reaching desired cycles.
 // return HALT if the simulator halts on 0xfeedfeed
@@ -96,6 +101,31 @@ Status runCycles(uint64_t cycles) {
         Simulator::Instruction memPrev = pipelineInfo.memInst;
         Simulator::Instruction wbPrev = pipelineInfo.wbInst;
 
+
+        // DATA CACHE STALLING
+        if (dCacheStallCycles > 0){
+
+            // Pay one cycle of the stall
+            dCacheStallCycles--;
+
+            DCACHE_STALL:
+            // Keep the MEM-stage instruction (the load/store that missed)
+            pipelineInfo.memInst = memPrev;
+
+            // Freeze younger stages: EX, ID, IF stay the same
+            pipelineInfo.exInst  = exPrev;
+            pipelineInfo.idInst  = idPrev;
+
+            // Nothing new retires while the miss is outstanding
+            pipelineInfo.wbInst = nop(BUBBLE);
+
+            // Let any outstanding I-cache miss proceed in parallel
+            if (iCacheStallCycles > 0) {
+                iCacheStallCycles--;
+            }
+
+            goto DUMP_STATE;
+        }
 
         // BRANCH CATCHER
         bool idIsBranch = (idPrev.opcode == OP_BRANCH) || (idPrev.opcode == OP_JALR) ||
@@ -124,6 +154,14 @@ Status runCycles(uint64_t cycles) {
 
         bool bubbleEXstallID = (catchLoadUse || catchArithBranch) || catchLoadBranch;
 
+        // D_CACHE MISS DETECTION
+        // first check for a memory exception on the address that will access D-Cache
+        // Memory access happens in MEM stage: use memPrev
+        bool memAccess = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem);
+
+        bool dCacheStall = false;
+
+
         // WB SEQUENCE
         // WB Check for halt instruction 
         pipelineInfo.wbInst = nop(BUBBLE);
@@ -136,6 +174,17 @@ Status runCycles(uint64_t cycles) {
                 exPrev.op2Val = wbPrev.memResult;
         }
         pipelineInfo.memInst = simulator->simMEM(exPrev);
+        
+        // catch the DCache stall
+        memAccess = (pipelineInfo.memInst.readsMem || pipelineInfo.memInst.writesMem);
+        if (memAccess && dCacheStallCycles == 0) {
+            CacheOperation type = pipelineInfo.memInst.readsMem ? CACHE_READ : CACHE_WRITE;
+            dCacheStall = !dCache->access(pipelineInfo.memInst.memAddress, type);
+        }
+        if (dCacheStall){
+            dCacheStallCycles = dCache->config.missLatency;
+            goto DCACHE_STALL;
+        }
 
         // EX SEQUENCE
         if(bubbleEXstallID){
@@ -205,7 +254,8 @@ Status runCycles(uint64_t cycles) {
         }
     }
 
-    
+    DUMP_STATE:
+
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
