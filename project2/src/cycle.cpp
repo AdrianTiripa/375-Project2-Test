@@ -123,10 +123,6 @@ Status runCycles(uint64_t cycles) {
         // WB Check for halt instruction 
         pipelineInfo.wbInst = nop(BUBBLE);
         pipelineInfo.wbInst = simulator->simWB(memPrev);
-        if (pipelineInfo.wbInst.isHalt) {
-            status = HALT;
-            break;
-        }
 
         // MEM SEQUENCE
         // special forwarding load-store data dependency
@@ -191,6 +187,11 @@ Status runCycles(uint64_t cycles) {
 
         // MOVE ON
         PC = nextPC;
+        
+        if (pipelineInfo.wbInst.isHalt) {
+            status = HALT;
+            break;
+        }
     }
 
     
