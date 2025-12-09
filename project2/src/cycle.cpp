@@ -183,6 +183,7 @@ Status runCycles(uint64_t cycles) {
             dCacheStall = !dCache->access(pipelineInfo.memInst.memAddress, type);
         }
         if (dCacheStall){
+            dCacheStall = false;
             dCacheStallCycles = dCache->config.missLatency;
         }
 
@@ -200,6 +201,7 @@ Status runCycles(uint64_t cycles) {
         if (iCacheStallCycles > 0){
             iCacheStallCycles--;
             pipelineInfo.idInst = nop(BUBBLE);
+            pipelineInfo.ifInst = ifPrev;
             goto DUMP_STATE;
         }
 
@@ -245,6 +247,7 @@ Status runCycles(uint64_t cycles) {
             iCacheStall = !iCache->access(PC, CACHE_READ);
             if (iCacheStall) {
                iCacheStallCycles = iCache->config.missLatency;
+               iCacheStall = false;
                goto DUMP_STATE; 
             }
         }
