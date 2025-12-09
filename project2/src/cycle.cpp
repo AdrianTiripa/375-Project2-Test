@@ -169,7 +169,7 @@ Status runCycles(uint64_t cycles) {
             else{
                 pipelineInfo.idInst = simulator->simID(ifPrev);
                 if(ifPrev.status == SPECULATIVE){
-                    pipelineInfo.idInst = NORMAL;
+                    pipelineInfo.idInst.status = NORMAL;
                 }
             }
 
