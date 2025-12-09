@@ -49,10 +49,6 @@ Status initSimulator(CacheConfig& iCacheConfig, CacheConfig& dCacheConfig, Memor
     iCache = new Cache(iCacheConfig, I_CACHE);
     dCache = new Cache(dCacheConfig, D_CACHE);
     return SUCCESS;
-
-    loadStallCount = 0
-    iCacheStallCycles = 0;
-    dCacheStallCycles = 0;
 }
 
 static uint64_t forwarding(uint64_t rs, bool readsRs, uint64_t opVal,
