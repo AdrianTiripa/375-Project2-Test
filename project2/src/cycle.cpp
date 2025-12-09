@@ -198,6 +198,7 @@ Status runCycles(uint64_t cycles) {
         }
 
         // ID SEQUENCE
+        // ICACHE
         if (iCacheStallCycles > 0){
             iCacheStallCycles--;
             pipelineInfo.ifInst = ifPrev;
@@ -243,18 +244,16 @@ Status runCycles(uint64_t cycles) {
             pipelineInfo.ifInst = ifPrev; 
         }
         else{
-            pipelineInfo.ifInst = simulator->simIF(PC);
+            pipelineInfo.ifInst = simulator->simIF(nextPC);
             if (iCacheStallCycles == 0 && pipelineInfo.idInst.isLegal){
                 iCacheStall = !iCache->access(PC, CACHE_READ);
-                std::cout << "iCacheStall" << iCacheStall << std::endl;
                 if (iCacheStall) {
-                iCacheStallCycles = iCache->config.missLatency;
-                std::cout << "iCacheStallCycle" << iCacheStallCycles << std::endl;
-                iCacheStall = false;
-                goto DUMP_STATE; 
+                    iCacheStallCycles = iCache->config.missLatency;
+                    iCacheStall = false;
+                    goto DUMP_STATE; 
                 }
                 else{
-                    nextPC=PC+4;
+                    nextPC = PC+4;
                 }
             }
         }
