@@ -153,12 +153,10 @@ Status runCycles(uint64_t cycles) {
            pipelineInfo.idInst = idPrev;
         }
         else{
+            nextPC = PC + 4;
             if(idIsBranch){
                 idPrev = simulator->simNextPCResolution(idPrev);
                 taken = ((idPrev.PC+4) != (idPrev.nextPC));
-            }
-            else{
-                nextPC = PC + 4;
             }
             
             if(taken){
@@ -167,7 +165,6 @@ Status runCycles(uint64_t cycles) {
             }
             else{
                 pipelineInfo.idInst = simulator->simID(ifPrev);
-                nextPC = PC + 4;
             }
 
         }
