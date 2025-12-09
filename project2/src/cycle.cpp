@@ -248,7 +248,7 @@ Status runCycles(uint64_t cycles) {
             if (iCacheStall) {
                iCacheStallCycles = iCache->config.missLatency;
                iCacheStall = false;
-               goto DUMP_STATE; 
+               // goto DUMP_STATE; 
             }
         }
 
