@@ -253,6 +253,9 @@ Status runCycles(uint64_t cycles) {
                 iCacheStall = false;
                 goto DUMP_STATE; 
                 }
+                else{
+                    nextPC=PC+4;
+                }
             }
         }
 
