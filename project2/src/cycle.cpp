@@ -275,6 +275,8 @@ Status runCycles(uint64_t cycles) {
 
     DUMP_STATE:
     std::cout << "PC" << PC << std::endl;
+    std::cout << "stats" << status << std::endl;
+
     pipeState.ifPC = pipelineInfo.ifInst.PC;
     pipeState.ifStatus = pipelineInfo.ifInst.status;
     pipeState.idInstr = pipelineInfo.idInst.instruction;
