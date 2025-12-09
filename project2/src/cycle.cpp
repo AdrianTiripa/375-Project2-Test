@@ -175,9 +175,6 @@ Status runCycles(uint64_t cycles) {
         }
         else{
             pipelineInfo.ifInst = simulator->simIF(PC);
-            if(taken){
-               pipelineInfo.ifInst = simulator->simIF(nextPC); 
-            }
         }
 
         // UPDATE STATUS FOR IF
